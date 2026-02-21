@@ -1,0 +1,498 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:ital,wght@0,400;0,700;1,400;1,700&family=Poppins:wght@300;400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Set color variables for light and dark modes */
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+
+    /* Nigerian-inspired colors */
+    --primary: 153 100% 27%;
+    /* Nigerian flag green */
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 47 100% 50%;
+    /* Gold accent */
+    --secondary-foreground: 220 13% 18%;
+
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+
+    --accent: 30 93% 54%;
+    /* Orange accent */
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 153 100% 27%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 153 100% 27%;
+    --sidebar-foreground: 0 0% 100%;
+    --sidebar-primary: 47 100% 50%;
+    --sidebar-primary-foreground: 220 13% 18%;
+    --sidebar-accent: 153 100% 21%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 153 100% 18%;
+    --sidebar-ring: 47 100% 50%;
+
+    /* Editor Redesign Variables */
+    --editor-left-bg: #2D2D2D;
+    --editor-right-bg: #1E1E1E;
+    --editor-canvas-bg: #E0E0E0;
+    --accent-teal: #00BFA5;
+  }
+
+  /* Dark theme variables using .dark class (Tailwind's default) */
+  .dark {
+    --background: 215 28% 12%;
+    --foreground: 210 40% 98%;
+
+    --card: 215 28% 15%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 215 28% 17%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 153 81% 34%;
+    --primary-foreground: 210 40% 98%;
+
+    --secondary: 47 100% 42%;
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 215 28% 18%;
+    --muted-foreground: 215.4 16.3% 66.9%;
+
+    --accent: 30 100% 45%;
+    /* darker orange accent */
+    --accent-foreground: 215 28% 90%;
+
+    --destructive: 0 62% 50%;
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 215 28% 32%;
+    --input: 215 28% 32%;
+    --ring: 153 81% 34%;
+
+    --sidebar-background: 215 28% 17%;
+    --sidebar-foreground: 210 40% 98%;
+    --sidebar-primary: 47 100% 42%;
+    --sidebar-primary-foreground: 215 28% 97%;
+    --sidebar-accent: 153 81% 34%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 215 28% 25%;
+    --sidebar-ring: 47 100% 50%;
+
+    /* Editor Redesign Variables (Dark) */
+    --editor-left-bg: #1A1A1A;
+    --editor-right-bg: #121212;
+    --editor-canvas-bg: #333333;
+    --accent-teal: #00BFA5;
+  }
+
+  /* Add viewport rules for better mobile experience */
+  html {
+    @apply text-base scroll-smooth;
+    font-size: 16px;
+    direction: ltr;
+    /* Make text scalable for smaller screens */
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased touch-manipulation overflow-x-hidden;
+    -webkit-tap-highlight-color: transparent;
+    direction: ltr;
+    /* Add overall horizontal padding for mobile */
+    padding-left: max(8px, env(safe-area-inset-left));
+    padding-right: max(8px, env(safe-area-inset-right));
+    margin: 0;
+    min-height: 100svh;
+    box-sizing: border-box;
+  }
+
+  /* Responsive Containers */
+  .container {
+    @apply px-3 md:px-8 py-4 mx-auto;
+    max-width: 100vw;
+  }
+
+  @media (max-width: 600px) {
+    html {
+      font-size: 15px;
+    }
+
+    .container {
+      @apply px-2 py-2;
+    }
+  }
+
+  @media (max-width: 400px) {
+    html {
+      font-size: 13.5px;
+    }
+
+    .container {
+      @apply px-1 py-1;
+    }
+  }
+
+  input,
+  textarea,
+  button,
+  select {
+    @apply focus:outline-none;
+    -webkit-appearance: none;
+  }
+
+  /* Fix iOS styling issues */
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  textarea {
+    @apply rounded-md;
+  }
+
+  /* Improve tap targets */
+  button,
+  .btn,
+  .shadcn-btn,
+  .btn-primary {
+    min-height: 40px;
+    min-width: 40px;
+    font-size: 1em;
+    line-height: 1.1;
+  }
+
+  @media (max-width: 600px) {
+
+    button,
+    .btn,
+    .shadcn-btn,
+    .btn-primary {
+      font-size: 1em;
+      padding-left: 1.1em;
+      padding-right: 1.1em;
+      border-radius: 0.6em;
+    }
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Prevent pull-to-refresh on mobile */
+body {
+  overscroll-behavior-y: contain;
+}
+
+/* Add responsive helpers */
+@layer utilities {
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* Script Editor Specific Styles */
+  .script-paper {
+    @apply bg-white dark:bg-[#181c1b] shadow-lg rounded-lg text-black dark:text-gray-100;
+    background-image: linear-gradient(90deg, rgba(245, 245, 245, 0.5) 1px, transparent 1px);
+    background-size: 0.5in 100%;
+    max-width: none !important;
+    /* remove any width restriction */
+    min-width: 0;
+    width: 100% !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0;
+    padding-right: 0;
+  }
+
+  /* Fountain syntax highlighting */
+  .fountain-heading {
+    @apply text-naija-green font-bold uppercase;
+  }
+
+  .fountain-character {
+    @apply text-naija-gold-dark font-bold uppercase;
+  }
+
+  .fountain-dialogue {
+    @apply text-gray-900 dark:text-gray-100;
+  }
+
+  .fountain-parenthetical {
+    @apply text-gray-600 dark:text-gray-400 italic;
+  }
+
+  .fountain-transition {
+    @apply text-naija-accent font-bold text-right uppercase;
+  }
+
+  .fountain-action {
+    @apply text-gray-800 dark:text-gray-200;
+  }
+
+  /* Animation for script elements */
+  .script-element-fade-in {
+    animation: scriptFadeIn 0.3s ease-out;
+  }
+
+  @keyframes scriptFadeIn {
+    from {
+      opacity: 0;
+      transform: translateY(5px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* ContentEditable placeholder styling */
+  [contenteditable] {
+    direction: ltr !important;
+    text-align: start !important;
+    writing-mode: horizontal-tb !important;
+  }
+
+  [contenteditable]:empty:before {
+    content: attr(data-placeholder);
+    color: #9ca3af;
+    pointer-events: none;
+    display: block;
+    direction: ltr !important;
+  }
+
+  .dark [contenteditable]:empty:before {
+    color: #6b7280;
+  }
+
+
+  /* Dark theme script editor */
+  .dark-script-editor {
+    @apply bg-[#222222] text-gray-200;
+  }
+
+  .scene-line-number {
+    @apply text-xs text-gray-500 dark:text-gray-400 w-8 text-right pr-2 inline-block;
+  }
+
+  /* Sidebar Mobile Overlay (z-index for overlays) */
+  .sidebar-mobile-overlay {
+    @apply fixed inset-0 z-[60] bg-black/40 transition-opacity;
+    pointer-events: auto;
+    touch-action: pan-y;
+  }
+
+  /* --- Dropdown/Popover menu improvements --- */
+  .dropdown-menu,
+  .popover-menu,
+  [role="menu"][data-state="open"],
+  .shadcn-popover,
+  .shadcn-dropdown-content,
+  .shadcn-select-content {
+    background-color: #fff !important;
+    z-index: 120 !important;
+    box-shadow: 0 3px 24px 0 #2223 !important;
+    border-radius: 0.5rem !important;
+    border: 1px solid #e5e7eb !important;
+  }
+
+  .dark .dropdown-menu,
+  .dark .popover-menu,
+  .dark [role="menu"][data-state="open"],
+  .dark .shadcn-popover,
+  .dark .shadcn-dropdown-content,
+  .dark .shadcn-select-content {
+    background-color: #222 !important;
+    color: #fafafa !important;
+    border: 1px solid #333 !important;
+  }
+
+  /* --- Touch targets --- */
+  .touch-target {
+    min-width: 48px !important;
+    min-height: 48px !important;
+    line-height: 1.2 !important;
+  }
+
+  /* Make all .btn, .shadcn-btn, .sidebar-menu-button accessible */
+  .btn,
+  .shadcn-btn,
+  .sidebar-menu-button {
+    min-height: 48px !important;
+    min-width: 48px !important;
+    font-size: 1em;
+  }
+
+  /* Mobile-specific script editor utilities */
+  .mobile-drawer {
+    transition: transform 300ms ease-in-out;
+  }
+
+  /* Improve mobile scrolling */
+  @media (max-width: 768px) {
+    .script-paper {
+      padding: 0.5rem !important;
+      font-size: 0.9rem;
+    }
+
+    /* Better touch targets on mobile */
+    button,
+    .btn {
+      min-height: 44px !important;
+      min-width: 44px !important;
+    }
+
+    /* Prevent text selection during drag operations on mobile */
+    [draggable="true"] {
+      -webkit-user-select: none;
+      user-select: none;
+    }
+  }
+}
+
+/* Keep app.css styles */
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  text-align: left;
+}
+
+/* Add global transition property */
+/* You can adjust the properties and duration as needed */
+/*html,*/
+/*body,*/
+/*#__next {*/
+/*  transition-property: background-color, color;*/
+/*  transition-duration: .3s;*/
+/*}*/
+
+/* Styles for the container div */
+.container {
+  padding: 0 2rem;
+  /* Add some padding on the sides */
+  margin: 0 auto;
+  /* Center the container */
+  max-width: 1200px;
+  /* Set a maximum width */
+}
+
+/* Basic styles for the main heading */
+h1 {
+  font-size: 2.5rem;
+  /* Increase the font size */
+  font-weight: bold;
+  /* Make it bold */
+  margin-bottom: 1rem;
+  /* Add some space below the heading */
+  color: #333;
+}
+
+.dark h1 {
+  color: #ebebeb;
+}
+
+/* Styles for paragraphs */
+p {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #555;
+}
+
+.dark p {
+  color: #c1c1c1;
+}
+
+/* Styles for links */
+a {
+  color: #0070f3;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+.dark a {
+  color: #67e1bb;
+}
+
+/* Styles for code blocks */
+code {
+  background: #f4f4f4;
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 0.75rem;
+  font-size: 1rem;
+  font-family: Menlo, Monaco, Lucida Console, Liberation Mono, DejaVu Sans Mono,
+    Bitstream Vera Sans Mono, Courier New, monospace;
+}
+
+.dark code {
+  background: #232323;
+  color: #fefefe;
+  border: 1px solid #333;
+}
+
+/* Styles for lists */
+ul,
+ol {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+
+li {
+  margin-bottom: 0.5rem;
+}
+
+/* Styles for images */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Responsive Containers */
+@media (min-width: 1600px) {
+
+  .script-paper,
+  .max-w-5xl,
+  .max-w-[1200px] {
+    max-width: 1300px !important;
+  }
+}

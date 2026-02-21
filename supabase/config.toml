@@ -1,0 +1,11 @@
+
+project_id = "jfjppoevmfjykflmntgl"
+
+[functions.generate-plot-content]
+verify_jwt = true
+
+[functions.generate-script-content]
+verify_jwt = true
+
+[functions.send-invite-email]
+verify_jwt = false

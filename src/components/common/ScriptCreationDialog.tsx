@@ -1,0 +1,516 @@
+
+import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useNavigate } from "react-router-dom";
+import { PenTool, Bot, FileText, Sparkles, Video } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { Genre, ScriptType, FilmIndustry, VideoAnalysis } from "@/types";
+import { v4 as uuid } from "uuid";
+import { supabase } from "@/integrations/supabase/client";
+import { ScriptTypeIndustrySelector } from "@/components/common/ScriptTypeIndustrySelector";
+import { VideoAnalysisDialog } from "@/components/common/VideoAnalysisDialog";
+import { EpisodicStructureSelector } from "@/components/common/EpisodicStructureSelector";
+import { SeasonPlanningSelector, SeasonPlan } from "@/components/common/SeasonPlanningSelector";
+import { supportsEpisodicStructure } from "@/utils/scriptTypeGuidance";
+
+interface ScriptCreationDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open, onOpenChange }) => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [showChoiceDialog, setShowChoiceDialog] = useState(false);
+  const [showTypeIndustrySelector, setShowTypeIndustrySelector] = useState(false);
+  const [showStructureSelector, setShowStructureSelector] = useState(false);
+  const [showSeasonPlanning, setShowSeasonPlanning] = useState(false);
+  const [showAIInputDialog, setShowAIInputDialog] = useState(false);
+  const [showVideoAnalysis, setShowVideoAnalysis] = useState(false);
+  const [creationMethod, setCreationMethod] = useState<'scratch' | 'ai' | 'video' | null>(null);
+  const [scriptType, setScriptType] = useState<ScriptType | null>(null);
+  const [filmIndustry, setFilmIndustry] = useState<FilmIndustry | null>(null);
+  const [episodicStructure, setEpisodicStructure] = useState<string | null>(null);
+  const [seasonPlan, setSeasonPlan] = useState<SeasonPlan | null>(null);
+  const [videoAnalysis, setVideoAnalysis] = useState<VideoAnalysis | null>(null);
+  const [storyIdea, setStoryIdea] = useState("");
+  const [scriptTitle, setScriptTitle] = useState("");
+  const [selectedGenre, setSelectedGenre] = useState<Genre>();
+
+  React.useEffect(() => {
+    if (open) {
+      setShowChoiceDialog(true);
+      setShowTypeIndustrySelector(false);
+      setShowStructureSelector(false);
+      setShowAIInputDialog(false);
+      setCreationMethod(null);
+      setScriptType(null);
+      setFilmIndustry(null);
+      setEpisodicStructure(null);
+      setSeasonPlan(null);
+      setStoryIdea("");
+      setScriptTitle("");
+      setSelectedGenre(undefined);
+    } else {
+      setShowChoiceDialog(false);
+      setShowTypeIndustrySelector(false);
+      setShowStructureSelector(false);
+      setShowAIInputDialog(false);
+    }
+  }, [open]);
+
+  const handleChoiceSelection = (method: 'scratch' | 'ai' | 'video') => {
+    setCreationMethod(method);
+    setShowChoiceDialog(false);
+
+    if (method === 'video') {
+      setShowVideoAnalysis(true);
+    } else {
+      setShowTypeIndustrySelector(true);
+    }
+  };
+
+  const handleVideoAnalysisComplete = (analysis: VideoAnalysis) => {
+    setVideoAnalysis(analysis);
+    setShowVideoAnalysis(false);
+    setShowTypeIndustrySelector(true);
+
+    // Pre-fill with suggested values from analysis
+    if (analysis.suggestedScriptType) {
+      setScriptType(analysis.suggestedScriptType);
+    }
+    if (analysis.suggestedIndustry) {
+      setFilmIndustry(analysis.suggestedIndustry);
+    }
+
+    // Pre-fill genre from analysis
+    if (analysis.extractedGenre) {
+      setSelectedGenre(analysis.extractedGenre as Genre);
+    }
+
+    // Create story idea from analysis data
+    const storyIdea = `Based on video analysis:\n\nKey Insights: ${analysis.keyInsights}\n\nThemes: ${analysis.themes.join(', ')}\n\nStory Structure: ${analysis.storyStructure}`;
+    setStoryIdea(storyIdea);
+
+    // Suggest a title based on analysis
+    setScriptTitle(analysis.videoTitle || 'Untitled Script');
+  };
+
+  const handleBackFromVideoAnalysis = () => {
+    setShowVideoAnalysis(false);
+    setShowChoiceDialog(true);
+  };
+
+  const handleTypeIndustrySelect = (type: ScriptType, industry: FilmIndustry) => {
+    setScriptType(type);
+    setFilmIndustry(industry);
+    setShowTypeIndustrySelector(false);
+
+    // Check if this script type supports episodic structure selection
+    if (supportsEpisodicStructure(type) && (creationMethod === 'ai' || creationMethod === 'video')) {
+      setShowStructureSelector(true);
+    } else if (creationMethod === 'video' || creationMethod === 'ai') {
+      setShowAIInputDialog(true);
+    } else {
+      // 'scratch' - create script immediately
+      handleCreateScript(type, industry);
+    }
+  };
+
+  const handleStructureSelect = (structure: string) => {
+    setEpisodicStructure(structure);
+    setShowStructureSelector(false);
+    // Show season planning for TV series
+    setShowSeasonPlanning(true);
+  };
+
+  const handleSeasonPlanComplete = (plan: SeasonPlan) => {
+    setSeasonPlan(plan);
+    setShowSeasonPlanning(false);
+
+    // If we have title and genre from the season plan (Series flow), go straight to plot generator
+    if (plan.title && plan.genre) {
+      setScriptTitle(plan.title);
+      setSelectedGenre(plan.genre);
+      setStoryIdea(plan.seasonTheme); // Use season theme as the story idea
+
+      // Store the data for the plot generator
+      const plotData = {
+        title: plan.title,
+        genre: plan.genre,
+        storyIdea: plan.seasonTheme,
+        scriptType: scriptType,
+        filmIndustry: filmIndustry,
+        episodicStructure: episodicStructure,
+        seasonPlan: plan,
+        videoAnalysis: videoAnalysis,
+        fromVideoAnalysis: !!videoAnalysis,
+        fromScriptCreation: true
+      };
+
+      localStorage.setItem('plotGeneratorData', JSON.stringify(plotData));
+
+      onOpenChange(false);
+      navigate("/plot-generator");
+
+      toast({
+        title: "Redirecting to AI Plot Generator",
+        description: "Generate your synopsis options and full content",
+      });
+    } else {
+      // Original flow for other types (or fallback)
+      setShowAIInputDialog(true);
+    }
+  };
+
+  const handleBackFromSeasonPlanning = () => {
+    setShowSeasonPlanning(false);
+    setShowStructureSelector(true);
+  };
+
+  const handleBackFromStructure = () => {
+    setShowStructureSelector(false);
+    setShowTypeIndustrySelector(true);
+  };
+
+  const handleCreateScript = async (typeOverride?: ScriptType, industryOverride?: FilmIndustry) => {
+    try {
+      const typeToUse = typeOverride || scriptType;
+      const industryToUse = industryOverride || filmIndustry;
+
+      if (!typeToUse || !industryToUse) {
+        console.error("Missing script type or industry");
+        toast({
+          title: "Error",
+          description: "Please select script type and industry",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const newId = uuid();
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (!user) {
+        toast({
+          title: "Authentication required",
+          description: "Please login to create a script",
+          variant: "destructive"
+        });
+        navigate("/auth");
+        return;
+      }
+
+      const { error } = await supabase.from('scripts').insert({
+        id: newId,
+        title: "Untitled Script",
+        user_id: user.id,
+        script_type: typeToUse,
+        film_industry: industryToUse
+      });
+
+      if (error) {
+        console.error("Error creating script:", error);
+        toast({
+          title: "Error",
+          description: "Failed to create script",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      onOpenChange(false);
+      navigate(`/editor/${newId}`);
+    } catch (error) {
+      console.error("Error creating script:", error);
+      toast({
+        title: "Error",
+        description: "Failed to create new script",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleBackFromTypeIndustry = () => {
+    setShowTypeIndustrySelector(false);
+
+    // Return to appropriate previous step based on creation method
+    if (creationMethod === 'video') {
+      setShowVideoAnalysis(true);
+    } else {
+      setShowChoiceDialog(true);
+    }
+  };
+
+  const handleAISubmit = async () => {
+    if (!storyIdea.trim() || !scriptTitle.trim() || !selectedGenre) {
+      toast({
+        title: "Missing Information",
+        description: "Please provide title, genre, and story idea",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Store the data for the plot generator
+    const plotData = {
+      title: scriptTitle,
+      genre: selectedGenre,
+      storyIdea: storyIdea,
+      scriptType: scriptType,
+      filmIndustry: filmIndustry,
+      episodicStructure: episodicStructure,
+      seasonPlan: seasonPlan,
+      videoAnalysis: videoAnalysis,
+      fromVideoAnalysis: !!videoAnalysis,
+      fromScriptCreation: true
+    };
+
+    localStorage.setItem('plotGeneratorData', JSON.stringify(plotData));
+
+    onOpenChange(false);
+    navigate("/plot-generator");
+
+    toast({
+      title: "Redirecting to AI Plot Generator",
+      description: "Generate your synopsis options and full content",
+    });
+  };
+
+  const handleGoBack = () => {
+    setShowAIInputDialog(false);
+    // Go back to season planning if TV series, otherwise to type/industry
+    if (scriptType && supportsEpisodicStructure(scriptType)) {
+      setShowSeasonPlanning(true);
+    } else {
+      setShowTypeIndustrySelector(true);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+        {showChoiceDialog && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Create New Script</DialogTitle>
+              <DialogDescription>
+                Choose how you'd like to create your screenplay
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid md:grid-cols-3 gap-4 py-6">
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => handleChoiceSelection('scratch')}>
+                <CardHeader className="text-center">
+                  <div className="mx-auto w-16 h-16 bg-naija-green/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-naija-green/20 transition-colors">
+                    <PenTool className="h-8 w-8 text-naija-green" />
+                  </div>
+                  <CardTitle className="text-base">Write Script</CardTitle>
+                  <CardDescription className="text-xs">
+                    Start from scratch
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-center pt-0">
+                  <Button className="w-full bg-naija-green hover:bg-naija-green/90 text-white text-xs px-2 whitespace-nowrap">
+                    <FileText className="mr-1 h-3 w-3 shrink-0" />
+                    Start Writing
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => handleChoiceSelection('ai')}>
+                <CardHeader className="text-center">
+                  <div className="mx-auto w-16 h-16 bg-naija-gold/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-naija-gold/20 transition-colors">
+                    <Bot className="h-8 w-8 text-naija-gold" />
+                  </div>
+                  <CardTitle className="text-base">Generate</CardTitle>
+                  <CardDescription className="text-xs">
+                    AI from idea
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-center pt-0">
+                  <Button className="w-full bg-naija-gold hover:bg-naija-gold/90 text-black text-xs px-2 whitespace-nowrap">
+                    <Sparkles className="mr-1 h-3 w-3 shrink-0" />
+                    Generate
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="cursor-pointer hover:shadow-lg transition-shadow group" onClick={() => handleChoiceSelection('video')}>
+                <CardHeader className="text-center">
+                  <div className="mx-auto w-16 h-16 bg-blue-500/10 rounded-full flex items-center justify-center mb-4 group-hover:bg-blue-500/20 transition-colors">
+                    <Video className="h-8 w-8 text-blue-500" />
+                  </div>
+                  <CardTitle className="text-base">Analyze</CardTitle>
+                  <CardDescription className="text-xs">
+                    From video
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="text-center pt-0">
+                  <Button className="w-full bg-blue-500 hover:bg-blue-500/90 text-white text-xs px-2 whitespace-nowrap">
+                    <Video className="mr-1 h-3 w-3 shrink-0" />
+                    Analyze
+                  </Button>
+                </CardContent>
+              </Card>
+            </div>
+          </>
+        )}
+
+        {showVideoAnalysis && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Analyze Video</DialogTitle>
+              <DialogDescription>
+                Provide a video URL to analyze its style and structure
+              </DialogDescription>
+            </DialogHeader>
+            <VideoAnalysisDialog
+              onBack={handleBackFromVideoAnalysis}
+              onProceed={handleVideoAnalysisComplete}
+            />
+          </>
+        )}
+
+        {showTypeIndustrySelector && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Script Details</DialogTitle>
+              <DialogDescription>
+                Select your script type and preferred film industry style
+              </DialogDescription>
+            </DialogHeader>
+            <ScriptTypeIndustrySelector
+              onSelect={handleTypeIndustrySelect}
+              onBack={handleBackFromTypeIndustry}
+            />
+          </>
+        )}
+
+        {showStructureSelector && scriptType && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Episodic Structure</DialogTitle>
+              <DialogDescription>
+                Choose the storytelling format for your TV series
+              </DialogDescription>
+            </DialogHeader>
+            <EpisodicStructureSelector
+              scriptType={scriptType}
+              onSelect={handleStructureSelect}
+              onBack={handleBackFromStructure}
+            />
+          </>
+        )}
+
+        {showSeasonPlanning && episodicStructure && (
+          <>
+            <DialogHeader>
+              <DialogTitle>Season Planning</DialogTitle>
+              <DialogDescription>
+                Define your season structure and episode breakdown
+              </DialogDescription>
+            </DialogHeader>
+            <SeasonPlanningSelector
+              episodicStructure={episodicStructure}
+              scriptType={scriptType}
+              onComplete={handleSeasonPlanComplete}
+              onBack={handleBackFromSeasonPlanning}
+            />
+          </>
+        )}
+
+
+        {showAIInputDialog && (
+          <>
+            <DialogHeader>
+              <DialogTitle>
+                {creationMethod === 'video' ? 'Refine Your Script Idea' : 'Tell Us Your Story Idea'}
+              </DialogTitle>
+              <DialogDescription>
+                {creationMethod === 'video'
+                  ? 'Add any additional details or modifications to guide the script generation based on the analyzed video'
+                  : 'Provide details about your story and we\'ll generate a complete script'
+                }
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Label htmlFor="title">Script Title</Label>
+                <Input
+                  id="title"
+                  value={scriptTitle}
+                  onChange={(e) => setScriptTitle(e.target.value)}
+                  placeholder="Enter your script title"
+                />
+                {creationMethod === 'video' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Pre-filled from video title (you can edit)
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="genre">Genre</Label>
+                <Select value={selectedGenre} onValueChange={(value) => setSelectedGenre(value as Genre)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select genre" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="DRAMA">Drama</SelectItem>
+                    <SelectItem value="COMEDY">Comedy</SelectItem>
+                    <SelectItem value="ACTION">Action</SelectItem>
+                    <SelectItem value="THRILLER">Thriller</SelectItem>
+                    <SelectItem value="ROMANCE">Romance</SelectItem>
+                    <SelectItem value="HORROR">Horror</SelectItem>
+                    <SelectItem value="SCIFI">Sci-Fi</SelectItem>
+                    <SelectItem value="FANTASY">Fantasy</SelectItem>
+                  </SelectContent>
+                </Select>
+                {creationMethod === 'video' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Detected from video analysis (you can change)
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <Label htmlFor="storyIdea">Story Idea</Label>
+                <Textarea
+                  id="storyIdea"
+                  value={storyIdea}
+                  onChange={(e) => setStoryIdea(e.target.value)}
+                  placeholder="Describe your story concept..."
+                  rows={6}
+                />
+                {creationMethod === 'video' && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Based on video analysis (feel free to modify or replace)
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-between space-x-2">
+              <Button variant="outline" onClick={handleGoBack}>
+                Back
+              </Button>
+              <Button
+                onClick={handleAISubmit}
+                className="bg-naija-gold hover:bg-naija-gold/90 text-black"
+              >
+                <Sparkles className="mr-2 h-4 w-4" />
+                Continue to Plot Generator
+              </Button>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+};

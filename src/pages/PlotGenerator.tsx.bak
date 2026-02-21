@@ -1,0 +1,1153 @@
+import React, { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Progress } from "@/components/ui/progress";
+import { Loader2, CheckCircle, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { Genre, Language, ScriptType, FilmIndustry } from "@/types";
+import { v4 as uuid } from "uuid";
+import { supabase } from "@/integrations/supabase/client";
+import { saveSynopsis } from "@/services/synopsis-service";
+import { parseScriptElements } from "@/utils/scriptElementParser";
+import { getIndustryAIPromptContext, filmIndustryContexts } from "@/utils/filmIndustryContext";
+import { getScriptTypeGuidance, getScriptTypeContext } from "@/utils/scriptTypeGuidance";
+import { getOptionsForIndustry } from "@/utils/industryOptions";
+import {
+  createInitialStoryState,
+  updateStoryStateFromScene,
+  generateCoherenceContext,
+  validateSceneCoherence,
+  type StoryState
+} from "@/utils/story-state-tracker";
+
+interface SynopsisOption {
+  id: string;
+  title: string;
+  content: string;
+  tone: string;
+}
+
+interface PlotSettings {
+  tone: string;
+  period: string;
+  setting: string;
+  pace: string;
+  language: Language;
+  scenesNumber: number;
+}
+
+export default function PlotGenerator() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  // Step tracking
+  const [currentStep, setCurrentStep] = useState<'synopsis' | 'settings' | 'generating'>('synopsis');
+
+  // Initial data from script creation
+  const [initialData, setInitialData] = useState<{
+    title: string;
+    genre: Genre;
+    storyIdea: string;
+    scriptType?: ScriptType;
+    filmIndustry?: FilmIndustry;
+    episodicStructure?: string;
+    seasonPlan?: {
+      episodeCount: number;
+      seasonTheme: string;
+      episodes: Array<{
+        episodeNumber: number;
+        title: string;
+        storyBeat: string;
+      }>;
+    };
+  } | null>(null);
+
+  // Synopsis generation
+  const [synopsisOptions, setSynopsisOptions] = useState<SynopsisOption[]>([]);
+  const [selectedSynopsis, setSelectedSynopsis] = useState<SynopsisOption | null>(null);
+  const [isGeneratingSynopses, setIsGeneratingSynopses] = useState(false);
+
+  // Plot settings
+  const [plotSettings, setPlotSettings] = useState<PlotSettings>({
+    tone: '',
+    period: '',
+    setting: '',
+    pace: '',
+    language: Language.ENGLISH,
+    scenesNumber: 15
+  });
+
+  // Batched script generation
+  const [isGeneratingScript, setIsGeneratingScript] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState(0);
+  const [currentBatch, setCurrentBatch] = useState(0);
+  const [totalBatches, setTotalBatches] = useState(0);
+  const [generatedScenes, setGeneratedScenes] = useState<string[]>([]);
+
+  // Multi-episode tracking
+  const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
+  const [totalEpisodes, setTotalEpisodes] = useState(0);
+  const [isMultiEpisode, setIsMultiEpisode] = useState(false);
+
+  // Load initial data on component mount
+  useEffect(() => {
+    const savedData = localStorage.getItem('plotGeneratorData');
+    if (savedData) {
+      const data = JSON.parse(savedData);
+      setInitialData(data);
+      localStorage.removeItem('plotGeneratorData'); // Clean up
+
+      // Adjust default scenes for Skit
+      if (data.scriptType === ScriptType.SKIT) {
+        setPlotSettings(prev => ({ ...prev, scenesNumber: 3 }));
+      }
+
+      // Check if coming from saved synopsis
+      if (data.fromSynopsis && data.savedSynopsis) {
+        // Skip synopsis generation, use saved one
+        const savedSynopsisOption: SynopsisOption = {
+          id: data.savedSynopsis.id,
+          title: data.savedSynopsis.title,
+          content: data.savedSynopsis.content,
+          tone: data.savedSynopsis.tone
+        };
+
+        setSynopsisOptions([savedSynopsisOption]);
+        setSelectedSynopsis(savedSynopsisOption);
+        setPlotSettings(prev => ({ ...prev, tone: data.savedSynopsis.tone }));
+
+        // Skip to settings step
+        setCurrentStep('settings');
+
+        toast({
+          title: "Synopsis Loaded",
+          description: "Configure your production settings below to generate the script.",
+        });
+      } else {
+        // Auto-generate synopsis options (existing behavior)
+        generateSynopsisOptions(data);
+      }
+    }
+  }, []);
+
+  const generateSynopsisOptions = async (data: {
+    title: string;
+    genre: Genre;
+    storyIdea: string;
+    scriptType?: ScriptType;
+    filmIndustry?: FilmIndustry;
+    episodicStructure?: string;
+    seasonPlan?: any;
+  }) => {
+    if (isGeneratingSynopses) return;
+    setIsGeneratingSynopses(true);
+    setSynopsisOptions([]);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("No session");
+
+      const isSkit = data.scriptType === ScriptType.SKIT;
+      const skitConstraints = isSkit ? `
+CRITICAL SKIT CONSTRAINTS:
+1. SMALL CAST: 1-4 characters maximum.
+2. SINGLE LOCATION: Keep the action in one main location.
+3. DURATION: Story must fit into 2-5 minutes.
+4. STRUCTURE: Use a clear Setup -> Twist -> Payoff (Punchline) flow.
+5. HOOK: Start with a strong immediate hook.
+` : '';
+
+      const scenarios = isSkit ? [
+        { tone: 'Witty', period: 'Modern Day', setting: 'Urban', pace: 'Fast', description: "Create a witty and clever story with sharp dialogue and unexpected turns" },
+        { tone: 'Dramatic', period: 'Modern Day', setting: 'Local', pace: 'Moderate', description: "Create a dramatic and emotionally intense story with deep character development and complex themes" },
+        { tone: 'Satirical', period: 'Contemporary', setting: 'Everyday Life', pace: 'Snappy', description: "Create a satirical story that uses humor, irony, or exaggeration to criticize or expose human folly" }
+      ] : [
+        { tone: "Dramatic", description: "Create a dramatic and emotionally intense story with deep character development and complex themes" },
+        { tone: "Light-hearted", description: "Create a light-hearted and uplifting story with humor, optimism, and heartwarming moments" },
+        { tone: "Suspenseful", description: "Create a suspenseful and thrilling story with tension, mystery, and unexpected plot twists" }
+      ];
+
+      const options: SynopsisOption[] = [];
+
+      // Get film industry context if available
+      const industryContext = data.filmIndustry ? getIndustryAIPromptContext(data.filmIndustry) : '';
+      const scriptTypeText = data.scriptType ? ` ${data.scriptType}` : '';
+      const scriptTypeGuidance = data.scriptType ? getScriptTypeGuidance(data.scriptType, data.episodicStructure) : '';
+
+      // Get season plan context if available
+      const seasonPlanContext = data.seasonPlan ? `\n## SEASON PLAN CONTEXT\nSeason Theme: ${data.seasonPlan.seasonTheme}\nTotal Episodes: ${data.seasonPlan.episodeCount}\nOverall Season Flow:\n${data.seasonPlan.episodes.slice(0, 5).map((e: any) => `Episode ${e.episodeNumber}: ${e.title} - ${e.storyBeat}`).join('\n')}\n` : '';
+
+      for (const scenario of scenarios) {
+        const synopsisPrompt = `Create a comprehensive professional treatment for a ${scenario.tone.toLowerCase()} ${data.genre}${scriptTypeText} titled "${data.title}".
+
+${industryContext ? `\n${industryContext}\n\nIMPORTANT: Adapt this story to the specified film industry style above. Incorporate appropriate:\n- Language patterns and dialogue styles\n- Cultural references and nuances\n- Story structure conventions\n- Character naming and development\n- Setting and atmosphere specific to this industry\n\n` : ''}${scriptTypeGuidance ? `${scriptTypeGuidance}\n\nIMPORTANT: Structure this treatment according to the script type guidance above. Consider:\n- The unique structural requirements of this format\n- Appropriate pacing and story arc for this type\n- Character development suited to this medium\n- Any format-specific storytelling conventions\n\n` : ''}${skitConstraints}${seasonPlanContext ? `${seasonPlanContext}\n\nIMPORTANT: Use the season plan above to ensure this episode or series treatment fits into the larger narrative arc specified.\n\n` : ''}Story concept: ${data.storyIdea}
+
+The treatment should be extensive and detailed, including:
+
+**LOGLINE:**
+A compelling one-sentence summary that captures the essence, stakes, and unique appeal of the story.
+
+**FULL SYNOPSIS (6-8 detailed paragraphs):**
+- Opening situation: Establish the world, main character's ordinary life, and inciting incident
+- First act development: How the protagonist is drawn into the central conflict
+- Second act complications: Major obstacles, character growth, relationship dynamics
+- Midpoint crisis: The turning point that changes everything
+- Third act escalation: Rising action, climax preparation, character transformations
+- Climax and resolution: How conflicts are resolved and character arcs completed
+- Themes and deeper meaning: What the story says about the human condition
+- Cultural authenticity: Authentic cultural dynamics and realistic character motivations
+
+**DETAILED CHARACTER PROFILES:**
+- PROTAGONIST: Full name (appropriate to the cultural context), age, occupation, detailed background, personality traits, internal conflicts, external goals, character arc from beginning to end
+- ANTAGONIST: Full name, motivation, background, how they oppose the protagonist, their own believable goals and justifications
+- SUPPORTING CHARACTERS: 3-4 key supporting characters with names, relationships, roles in the story, and brief but specific backgrounds
+
+**SETTING & ATMOSPHERE:**
+- Primary locations with vivid descriptions
+- Time period and cultural atmosphere
+- Specific regional/cultural context and social dynamics
+- Visual style and mood throughout different acts
+- How setting influences character behavior and plot development
+
+**THEMES & CULTURAL ELEMENTS:**
+- Central themes explored throughout the narrative
+- Cultural authenticity and social commentary
+- Universal human experiences that transcend cultural boundaries
+- How tradition and modernity intersect in the story
+
+**STORY STRUCTURE:**
+- Appropriate structure for the selected film industry
+- Key plot points and their emotional impact
+- Pacing and rhythm appropriate for the genre and industry style
+- How tension builds and releases throughout the narrative
+
+Make this treatment comprehensive, engaging, and suitable for ${scenario.description.toLowerCase()}. ${industryContext ? 'Ensure the story authentically reflects the selected film industry\'s storytelling conventions, cultural nuances, and production style.' : 'Ensure high cultural authenticity with realistic characters, settings, and social dynamics while maintaining universal appeal.'}`;
+
+        console.log(`Generating comprehensive ${scenario.tone} synopsis...`);
+
+        try {
+          const { data: aiResponse, error } = await supabase.functions.invoke('generate-plot-content', {
+            body: {
+              promptType: 'plot',
+              genre: data.genre,
+              seedPlot: synopsisPrompt,
+              culturalAuthenticity: 90,
+              includeTraditional: true,
+              setting: { region: "Nigeria" }
+            }
+          });
+
+          if (error) {
+            console.error(`Error generating ${scenario.tone} synopsis:`, error);
+            continue;
+          }
+
+          if (aiResponse && aiResponse.success && aiResponse.content) {
+            // Check if this was a cache hit
+            if (aiResponse.cache_info?.status === 'cache_hit') {
+              toast({
+                title: "⚡ Instant Generation",
+                description: "Content delivered from cache (< 1 second)",
+                duration: 3000,
+              });
+            }
+
+            const synopsisOption = {
+              id: `synopsis-${scenario.tone.toLowerCase()}`,
+              title: `${scenario.tone} ${data.genre} Treatment`,
+              content: aiResponse.content,
+              tone: scenario.tone
+            };
+            options.push(synopsisOption);
+
+            // Save synopsis to database
+            try {
+              const { data: { user } } = await supabase.auth.getUser();
+              if (user) {
+                await saveSynopsis({
+                  title: synopsisOption.title,
+                  content: synopsisOption.content,
+                  userId: user.id
+                });
+              }
+            } catch (saveError) {
+              console.warn('Failed to save synopsis:', saveError);
+            }
+          }
+        } catch (requestError) {
+          console.error(`Request error for ${scenario.tone}:`, requestError);
+        }
+      }
+
+      setSynopsisOptions(options);
+
+      if (options.length > 0) {
+        toast({
+          title: "Professional Treatments Generated",
+          description: `${options.length} comprehensive story treatments created and saved.`,
+        });
+      }
+    } catch (error) {
+      console.error('Error generating synopsis options:', error);
+      toast({
+        title: "Error",
+        description: "Failed to generate synopsis options. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingSynopses(false);
+    }
+  };
+
+  const generateSceneBatch = async (
+    batchNumber: number,
+    totalScenes: number,
+    scriptId: string,
+    storyState: StoryState,
+    episodeInfo?: { number: number; title: string; beat: string }
+  ) => {
+    // Reduced batch size to 1 for maximum reliability
+    const scenesPerBatch = 1;
+    const startScene = batchNumber * scenesPerBatch + 1;
+    const endScene = Math.min((batchNumber + 1) * scenesPerBatch, totalScenes);
+
+    console.log(`=== Generating Batch ${batchNumber + 1} ===`);
+    console.log(`Scenes ${startScene}-${endScene} of ${totalScenes}`);
+
+    // Get film industry context if available
+    const industryContext = initialData?.filmIndustry ? getIndustryAIPromptContext(initialData.filmIndustry) : '';
+    const scriptTypeText = initialData?.scriptType ? ` (${initialData.scriptType})` : '';
+    const scriptTypeGuidance = initialData?.scriptType ? getScriptTypeGuidance(initialData.scriptType, initialData.episodicStructure) : '';
+
+    // Get season plan context if available
+    const seasonPlanContext = initialData?.seasonPlan ? `
+## SEASON PLAN CONTEXT
+Season Theme: ${initialData.seasonPlan.seasonTheme}
+Total Episodes: ${initialData.seasonPlan.episodeCount}
+${episodeInfo ? `
+CURRENT TARGET EPISODE: Episode ${episodeInfo.number} - ${episodeInfo.title}
+EPISODE STORY BEAT: ${episodeInfo.beat}
+
+TASK: You are writing SPECIFICALLY scenes for Episode ${episodeInfo.number}. Ensure these scenes develop the story beat provided for this episode.` : `
+Overall Season Flow:
+${initialData.seasonPlan.episodes.slice(0, 5).map(e => `Episode ${e.episodeNumber}: ${e.title} - ${e.storyBeat}`).join('\n')}`}
+` : '';
+
+    // Build the scene generation prompt with explicit scene count requirements
+    const scenesToGenerate = endScene - startScene + 1;
+    const episodeText = episodeInfo ? ` (Episode ${episodeInfo.number}: ${episodeInfo.title})` : '';
+
+    const isSkit = initialData?.scriptType === ScriptType.SKIT;
+    const skitConstraints = isSkit ? `
+CRITICAL SKIT CONSTRAINTS:
+1. SMALL CAST: 1-4 characters maximum.
+2. SINGLE LOCATION: Keep the action in one main location.
+3. DURATION: Story must fit into 2-5 minutes.
+4. STRUCTURE: Use a clear Setup -> Twist -> Payoff (Punchline) flow.
+5. HOOK: Start with a strong immediate hook.
+6. ENDING: End abruptly after the payoff.
+` : '';
+
+    const scenePrompt = batchNumber === 0 ?
+      `You are a professional screenplay writer. Create EXACTLY ${scenesToGenerate} COMPLETE PROFESSIONAL SCREENPLAY SCENES (numbered ${startScene} through ${endScene}) out of a total of ${totalScenes} scenes for "${initialData?.title}${episodeText}"${scriptTypeText}.
+
+${industryContext ? `\n${industryContext}\n\nIMPORTANT: Write scenes following the film industry style specified above. Use appropriate:\n- Dialogue styles and language patterns\n- Cultural references and nuances  \n- Character interactions and relationships\n- Scene formatting and structure\n- Visual storytelling approach\n\n` : ''}${scriptTypeGuidance ? `${scriptTypeGuidance}\n\nCRITICAL: Follow the script type guidance above when writing these scenes:\n- Use the appropriate structure and pacing for this format\n- Handle characters according to the specified approach\n- Create scenes that serve the overall story type\n- Apply format-specific storytelling techniques\n\n` : ''}${skitConstraints}${seasonPlanContext ? `${seasonPlanContext}\n\nIMPORTANT: Ensure these scenes align with the overarching season theme and episodic structure provided above.\n\n` : ''}TREATMENT CONTEXT (for reference only - do not repeat in output):
+${selectedSynopsis?.content.substring(0, 500)}...
+
+PRODUCTION SETTINGS:
+- Genre: ${initialData?.genre}
+- Tone: ${plotSettings.tone}
+- Period: ${plotSettings.period}
+- Setting: ${plotSettings.setting}
+- Pace: ${plotSettings.pace}
+
+CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
+
+1. **SCENE COUNT**: Generate EXACTLY ${scenesToGenerate} scenes, no more, no less
+2. **SCENE NUMBERING**: Each scene MUST start with "SCENE ${startScene}", "SCENE ${startScene + 1}", etc. up to "SCENE ${endScene}"
+3. **SCENE STRUCTURE**: Each scene must include:
+   - Clear scene heading (INT./EXT. LOCATION - TIME)
+   - Detailed action descriptions (minimum 3-4 lines per scene)
+   - Character-driven dialogue with proper formatting
+   - Technical directions where appropriate
+   - Clear scene transitions
+
+4. **PROFESSIONAL FORMATTING**:
+   - Scene headings in ALL CAPS
+   - Character names in ALL CAPS before dialogue
+   - Action lines in standard case
+   - Proper spacing between elements
+   - Industry-standard screenplay format
+
+5. **CONTENT QUALITY**:
+   - Each scene should be substantial (minimum 1/2 page worth of content)
+   - Detailed visual descriptions
+   - Meaningful character interactions
+   - Clear dramatic purpose
+   - Technically sound cinematography considerations
+
+6. **STORY PROGRESSION**: 
+   - Scenes ${startScene}-${endScene} should cover the opening act
+   - Establish characters, setting, and central conflict
+   - Build dramatic tension progressively
+   - Each scene must advance the plot
+
+OUTPUT FORMAT EXAMPLE:
+SCENE ${startScene}
+
+INT. LOCATION - TIME
+
+Detailed action description here...
+
+CHARACTER NAME
+Dialogue here.
+
+[Continue with remaining ${scenesToGenerate - 1} scenes in the same format]
+
+Remember: You MUST generate all ${scenesToGenerate} scenes. Do not stop early. Number each scene clearly.` :
+
+      `You are a professional screenplay writer. Continue the screenplay with EXACTLY ${scenesToGenerate} COMPLETE SCENES (numbered ${startScene} through ${endScene}) out of ${totalScenes} total scenes.
+
+${industryContext ? `Film Industry Style: ${initialData?.filmIndustry}\nMaintain the cultural authenticity and storytelling conventions of this industry.\n\n` : ''}${scriptTypeGuidance ? `${scriptTypeGuidance}\n\nCRITICAL: Continue following the script type guidance:\n- Maintain the appropriate structure and pacing\n- Keep character development consistent with the format\n- Ensure scenes serve the overall story type\n- Apply the same format-specific techniques\n\n` : ''}${seasonPlanContext ? `${seasonPlanContext}\n\nIMPORTANT: Maintain alignment with the overarching season theme and episodic structure.\n\n` : ''}CONTINUE FROM PREVIOUS SCENES - maintain story continuity and character development.
+
+SETTINGS:
+- Genre: ${initialData?.genre}, Tone: ${plotSettings.tone}
+- Period: ${plotSettings.period}, Setting: ${plotSettings.setting}
+
+CRITICAL REQUIREMENTS - YOU MUST FOLLOW THESE EXACTLY:
+
+1. **SCENE COUNT**: Generate EXACTLY ${scenesToGenerate} scenes (${startScene} through ${endScene}), no more, no less
+2. **SCENE NUMBERING**: Start with "SCENE ${startScene}" and continue sequentially to "SCENE ${endScene}"
+3. **CONTINUITY**: Continue naturally from the previous scenes
+4. **SCENE STRUCTURE**: Each scene must include:
+   - Clear scene heading (INT./EXT. LOCATION - TIME)
+   - Detailed action descriptions (minimum 3-4 lines)
+   - Character dialogue with proper formatting
+   - Technical directions
+   - Scene transitions
+
+5. **PROFESSIONAL FORMATTING**:
+   - Scene headings in ALL CAPS
+   - Character names in ALL CAPS before dialogue
+   - Action lines in standard case
+   - Industry-standard screenplay format
+
+6. **CONTENT QUALITY**:
+   - Substantial scenes (minimum 1/2 page each)
+   - Detailed visual descriptions
+   - Meaningful character development
+   - Clear dramatic progression
+
+7. **STORY PROGRESSION**:
+   - Scenes ${startScene}-${endScene} should continue the narrative arc
+   - Build on established characters and conflicts
+   - Escalate dramatic tension
+   - Each scene must serve the overall story
+
+OUTPUT FORMAT:
+SCENE ${startScene}
+
+INT./EXT. LOCATION - TIME
+
+Action description...
+
+CHARACTER NAME
+Dialogue...
+
+[Continue with all ${scenesToGenerate} scenes]
+
+Remember: Generate ALL ${scenesToGenerate} scenes. Do not stop until you reach SCENE ${endScene}.`;
+
+    const maxRetries = 3;
+    let retryCount = 0;
+
+    while (retryCount <= maxRetries) {
+      try {
+        console.log(`Making request to generate-script-content (Attempt ${retryCount + 1}/${maxRetries + 1})...`);
+
+        // Get current user to ensure authentication
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError || !user) {
+          console.error('Authentication error:', userError);
+          throw new Error('Authentication required. Please sign in.');
+        }
+
+        console.log('User authenticated:', user.id);
+
+        // Dynamic settings based on industry
+        const isNollywood = !initialData?.filmIndustry || initialData.filmIndustry === 'Nollywood';
+        const region = plotSettings.setting || (isNollywood ? 'Lagos' : 'International');
+
+        // Generate comprehensive coherence context from story state
+        const coherenceContext = generateCoherenceContext(storyState, startScene);
+
+        // Pass enhanced context to maintain consistency
+        const contextInjection = coherenceContext;
+
+        // Determine prompt body
+        const body = {
+          promptType: 'dialogue',
+          genre: initialData?.genre || 'DRAMA',
+          subGenres: [],
+          language: plotSettings.language || 'ENGLISH',
+          setting: { region: region },
+          seedPlot: `Create a full screenplay script scene: ${scenePrompt}${contextInjection}`,
+          culturalAuthenticity: 95,
+          includeTraditional: isNollywood // Only include traditional African elements if Nollywood
+        };
+
+        // Make the request with proper structure and authentication
+        const { data: response, error } = await supabase.functions.invoke('generate-plot-content', {
+          body
+        });
+
+        console.log(`Response received for batch ${batchNumber}:`, {
+          success: response?.success,
+          hasError: !!error,
+          error: error,
+          response: response
+        });
+
+        if (error) {
+          console.error(`Edge function error for batch ${batchNumber}:`, error);
+
+          // Log specific error details if available
+          if (error instanceof Error) {
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            // @ts-ignore - Some errors might have additional context
+            if (error.context) console.error('Error context:', error.context);
+          }
+
+          // Enhanced error handling with specific error types
+          if (error.message?.includes('Failed to send a request to the Edge Function')) {
+            throw new Error('Network error: Could not connect to AI service. Please check your internet connection and try again.');
+          } else if (error.message?.includes('auth')) {
+            throw new Error('Authentication failed. Please sign in and try again.');
+          } else {
+            // Try to extract more details from the error message if it's JSON-like
+            throw new Error(`Service error: ${error.message || 'Unknown error occurred'}`);
+          }
+        }
+
+        if (!response) {
+          console.error(`No response received for batch ${batchNumber}`);
+          throw new Error('No response received from script generation service.');
+        }
+
+        if (!response.success) {
+          console.error(`Script generation failed for batch ${batchNumber} - Full Response:`, response);
+
+          // Show specific error from the edge function
+          const errorMessage = response.error || 'Script generation failed';
+          const errorType = response.errorType || 'unknown';
+          const debugInfo = response.debug ? ` (Debug: ${response.debug})` : '';
+
+          throw new Error(`${errorType.toUpperCase()}: ${errorMessage}${debugInfo}`);
+        }
+
+        // Check for cache hit and show notification
+        if (response.cache_info?.status === 'cache_hit') {
+          toast({
+            title: "⚡ Instant Scene",
+            description: "Scene delivered from cache",
+            duration: 2000,
+          });
+        }
+
+        if (!response.content) {
+          console.error(`No content in response for batch ${batchNumber}:`, response);
+          throw new Error('No content received from script generation');
+        }
+
+        console.log(`Successfully generated batch ${batchNumber + 1}, content length: ${response.content.length}`);
+        return response.content;
+
+      } catch (error) {
+        console.error(`Error in generateSceneBatch (Attempt ${retryCount + 1}):`, error);
+
+        retryCount++;
+
+        if (retryCount > maxRetries) {
+          // Provide more specific error messages on final failure
+          if (error instanceof Error) {
+            if (error.message.includes('auth')) {
+              throw new Error('Authentication failed. Please sign in and try again.');
+            } else if (error.message.includes('network') || error.message.includes('fetch')) {
+              throw new Error('Network error. Please check your connection and try again.');
+            } else {
+              throw new Error(`Scene generation failed after ${maxRetries} retries: ${error.message}`);
+            }
+          } else {
+            throw new Error('Unknown error occurred during scene generation');
+          }
+        }
+
+        // Wait before retrying (exponential backoff: 2s, 4s, 8s)
+        const delay = Math.pow(2, retryCount) * 1000;
+        console.log(`Waiting ${delay}ms before retry...`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+  };
+
+  const handleGenerateScript = async () => {
+    if (!selectedSynopsis || !plotSettings.period || !plotSettings.setting || !plotSettings.pace) {
+      toast({
+        title: "Missing Information",
+        description: "Please complete all settings before generating the script.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to create a script.",
+        variant: "destructive"
+      });
+      navigate("/auth");
+      return;
+    }
+
+    setIsGeneratingScript(true);
+    setCurrentStep('generating');
+
+    const isSeries = initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES;
+
+    // Robust episode array creation with multiple fallbacks
+    let episodesToGenerate;
+    if (isSeries && initialData?.seasonPlan) {
+      const { episodeCount, episodes, seasonTheme } = initialData.seasonPlan;
+
+      // Use existing episodes if available and valid
+      if (episodes && episodes.length > 0) {
+        episodesToGenerate = episodes;
+      }
+      // Otherwise, generate stubs based on episodeCount
+      else if (episodeCount && episodeCount > 0) {
+        episodesToGenerate = Array.from({ length: episodeCount }, (_, i) => ({
+          episodeNumber: i + 1,
+          title: i === 0 ? 'Pilot' : `Episode ${i + 1}`,
+          storyBeat: seasonTheme || 'Episode story'
+        }));
+      }
+      // Final fallback: single episode
+      else {
+        episodesToGenerate = [{ episodeNumber: 1, title: 'Pilot', storyBeat: seasonTheme || '' }];
+      }
+    } else {
+      // Not a series - single script
+      episodesToGenerate = [{ episodeNumber: 1, title: '', storyBeat: '' }];
+    }
+
+    setTotalEpisodes(episodesToGenerate.length);
+    setIsMultiEpisode(isSeries && episodesToGenerate.length > 1);
+
+    try {
+      for (let i = 0; i < episodesToGenerate.length; i++) {
+        const currentEpisode = episodesToGenerate[i];
+        setCurrentEpisodeIndex(i + 1);
+        setGenerationProgress(0);
+
+        console.log(`\n=== Generating Episode ${i + 1} of ${episodesToGenerate.length} ===`);
+
+        // Create the script in database
+        const newScriptId = uuid();
+        const episodeTitleSuffix = isSeries ? ` - S01E${currentEpisode.episodeNumber}${currentEpisode.title ? `: ${currentEpisode.title}` : ''}` : '';
+        const scriptTitle = `${initialData?.title || "Untitled Script"}${episodeTitleSuffix}`;
+
+        const { error: scriptError } = await supabase.from('scripts').insert({
+          id: newScriptId,
+          title: scriptTitle,
+          user_id: user.id,
+          genre: initialData?.genre,
+          language: plotSettings.language,
+          script_type: initialData?.scriptType,
+          film_industry: initialData?.filmIndustry
+        });
+
+        if (scriptError) throw new Error(`Failed to create script: ${scriptError.message}`);
+
+        // Generate content
+        const scenesPerBatch = 1;
+        const localTotalBatches = Math.ceil(plotSettings.scenesNumber / scenesPerBatch);
+        setTotalBatches(localTotalBatches);
+
+        const allScenes = ['FADE IN:\n\n'];
+
+        for (let batch = 0; batch < localTotalBatches; batch++) {
+          setCurrentBatch(batch + 1);
+          const sceneNumber = batch + 1;
+
+          // Generate scene with current story state
+          const batchContent = await generateSceneBatch(
+            batch,
+            plotSettings.scenesNumber,
+            newScriptId,
+            currentStoryState,
+            isSeries ? currentEpisode : undefined
+          );
+
+          allScenes.push(batchContent);
+
+          // Update story state with newly generated scene
+          currentStoryState = updateStoryStateFromScene(
+            currentStoryState,
+            batchContent,
+            sceneNumber
+          );
+
+          // Validate coherence
+          const validation = validateSceneCoherence(currentStoryState, batchContent, sceneNumber);
+          if (validation.warnings.length > 0) {
+            console.warn(`⚠️ Scene ${sceneNumber} coherence warnings:`, validation.warnings);
+          }
+
+          console.log(`✅ Scene ${sceneNumber} generated. Active characters:`,
+            Array.from(currentStoryState.characters.keys()).slice(0, 5));
+
+          setGenerationProgress(((batch + 1) / localTotalBatches) * 100);
+
+          if (batch < localTotalBatches - 1) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+          }
+        }
+
+        allScenes.push('\n\nFADE OUT.\n\nTHE END');
+        const fullScript = allScenes.join('\n\n');
+
+        // Save elements
+        const elementsWithScriptId = parseScriptElements(fullScript).map(element => ({
+          ...element,
+          script_id: newScriptId
+        }));
+
+        const INSERT_CHUNK_SIZE = 500;
+        for (let j = 0; j < elementsWithScriptId.length; j += INSERT_CHUNK_SIZE) {
+          const chunk = elementsWithScriptId.slice(j, j + INSERT_CHUNK_SIZE);
+          const { error: elementsError } = await supabase.from('script_elements').insert(chunk);
+          if (elementsError) throw new Error(`Failed to save script content: ${elementsError.message}`);
+        }
+
+        console.log(`Episode ${i + 1} insertion completed.`);
+
+        // CRITICAL FIX: Explicitly enforce order using atomic RPC
+        // This guarantees that the database positions match the parsed narrative order exactly,
+        // overriding any potential insertion race conditions.
+        const allElementIds = elementsWithScriptId.map(e => e.id);
+        const { error: reorderError } = await supabase.rpc('reorder_script_elements_atomic' as any, {
+          p_script_id: newScriptId,
+          p_element_ids: allElementIds
+        });
+
+        if (reorderError) {
+          console.error("Failed to enforce final element order:", reorderError);
+          // Don't fail the whole process, but warn
+          toast({
+            title: "Warning",
+            description: "Script created but order verification failed. Please check the script in the editor.",
+            variant: "destructive"
+          });
+        } else {
+          console.log("Verified and enforced sequential element order.");
+        }
+      }
+
+      toast({
+        title: isSeries ? "Full Season Generated!" : "Professional Screenplay Generated!",
+        description: isSeries
+          ? `All ${episodesToGenerate.length} episodes have been created in your dashboard.`
+          : `Your ${plotSettings.scenesNumber}-scene screenplay has been created successfully.`,
+      });
+
+      // Navigate based on type
+      if (isSeries && episodesToGenerate.length > 1) {
+        navigate('/dashboard');
+      } else {
+        // Find the last created ID if it was just one
+        // (Actually it's better to just go to dashboard for series regardless)
+        navigate('/dashboard');
+      }
+
+    } catch (error) {
+      console.error('=== Script Generation Failed ===', error);
+      toast({
+        title: "Generation Failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive"
+      });
+      setCurrentStep('settings');
+    } finally {
+      setIsGeneratingScript(false);
+    }
+  };
+
+  const handleSynopsisSelect = (synopsis: SynopsisOption) => {
+    setSelectedSynopsis(synopsis);
+    setPlotSettings(prev => ({ ...prev, tone: synopsis.tone }));
+  };
+
+  const handleContinueToSettings = () => {
+    if (!selectedSynopsis) {
+      toast({
+        title: "Selection Required",
+        description: "Please select a synopsis to continue.",
+        variant: "destructive"
+      });
+      return;
+    }
+    setCurrentStep('settings');
+  };
+
+  const handleBackToDashboard = () => {
+    navigate('/dashboard');
+  };
+
+  if (!initialData && currentStep === 'synopsis') {
+    return (
+      <div className="container mx-auto py-8">
+        <Card>
+          <CardHeader>
+            <CardTitle>No Plot Data Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground mb-4">
+              Please start from the dashboard by creating a new script with AI generation.
+            </p>
+            <Button onClick={handleBackToDashboard}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="container mx-auto py-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Professional AI Screenplay Generator</h1>
+          {initialData && (
+            <p className="text-muted-foreground">
+              Creating "{initialData.title}" - {initialData.genre}
+            </p>
+          )}
+        </div>
+        <Button variant="outline" onClick={handleBackToDashboard}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      </div>
+
+      {/* Progress Steps */}
+      <div className="flex items-center space-x-4 mb-8">
+        <div className={`flex items-center space-x-2 ${currentStep === 'synopsis' ? 'text-primary' : 'text-green-600'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'synopsis' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
+            {currentStep !== 'synopsis' ? <CheckCircle className="h-4 w-4" /> : '1'}
+          </div>
+          <span>Choose Professional Treatment</span>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+        <div className={`flex items-center space-x-2 ${currentStep === 'settings' ? 'text-primary' : currentStep === 'generating' ? 'text-green-600' : 'text-muted-foreground'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'settings' ? 'bg-primary text-primary-foreground' : currentStep === 'generating' ? 'bg-green-600 text-white' : 'bg-muted'}`}>
+            {currentStep === 'generating' ? <CheckCircle className="h-4 w-4" /> : '2'}
+          </div>
+          <span>Configure Production Settings</span>
+        </div>
+        <ArrowRight className="h-4 w-4 text-muted-foreground" />
+        <div className={`flex items-center space-x-2 ${currentStep === 'generating' ? 'text-primary' : 'text-muted-foreground'}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'generating' ? 'bg-primary text-primary-foreground' : 'bg-muted'}`}>
+            3
+          </div>
+          <span>Generate Professional Script</span>
+        </div>
+      </div>
+
+      {/* Step 1: Synopsis Selection */}
+      {currentStep === 'synopsis' && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Choose Your Professional Story Treatment</CardTitle>
+              <p className="text-muted-foreground">
+                Select the comprehensive treatment that best matches your vision. Each includes detailed character profiles, plot structure, cultural elements, and thematic analysis.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {isGeneratingSynopses ? (
+                <div className="text-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                  <h3 className="text-lg font-semibold">Generating Comprehensive Professional Treatments</h3>
+                  <p className="text-muted-foreground">Creating detailed story treatments with character profiles, cultural elements, and industry-standard structure...</p>
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {synopsisOptions.map((synopsis) => (
+                    <Card
+                      key={synopsis.id}
+                      className={`cursor-pointer transition-all hover:shadow-md ${selectedSynopsis?.id === synopsis.id ? 'ring-2 ring-primary bg-primary/5' : ''
+                        }`}
+                      onClick={() => handleSynopsisSelect(synopsis)}
+                    >
+                      <CardHeader className="pb-3">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <CardTitle className="text-lg">{synopsis.title}</CardTitle>
+                            <Badge variant="secondary" className="mt-2">{synopsis.tone}</Badge>
+                          </div>
+                          {selectedSynopsis?.id === synopsis.id && (
+                            <CheckCircle className="h-5 w-5 text-primary" />
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="text-sm leading-relaxed whitespace-pre-line max-h-80 overflow-y-auto">
+                          {synopsis.content}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+
+                  {selectedSynopsis && (
+                    <div className="flex justify-end mt-6">
+                      <Button onClick={handleContinueToSettings} className="bg-primary">
+                        Continue to Production Settings
+                        <ArrowRight className="ml-2 h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Step 2: Plot Settings */}
+      {currentStep === 'settings' && (
+        <div className="space-y-6">
+          {(() => {
+            const options = getOptionsForIndustry(initialData?.filmIndustry);
+            return (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Configure Your Professional Screenplay</CardTitle>
+                  <p className="text-muted-foreground">
+                    Set the production details for your industry-standard screenplay
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <Label>Tone</Label>
+                      <Select value={plotSettings.tone} onValueChange={(value) => setPlotSettings({ ...plotSettings, tone: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select tone" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.tones.map((tone) => (
+                            <SelectItem key={tone} value={tone}>{tone}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Time Period</Label>
+                      <Select value={plotSettings.period} onValueChange={(value) => setPlotSettings({ ...plotSettings, period: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select period" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.periods.map((period) => (
+                            <SelectItem key={period.value} value={period.value}>{period.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Setting</Label>
+                      <Select value={plotSettings.setting} onValueChange={(value) => setPlotSettings({ ...plotSettings, setting: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select setting" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.settings.map((setting) => (
+                            <SelectItem key={setting} value={setting}>{setting}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Pace</Label>
+                      <Select value={plotSettings.pace} onValueChange={(value) => setPlotSettings({ ...plotSettings, pace: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select pace" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.paces.map((pace) => (
+                            <SelectItem key={pace} value={pace}>{pace}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div>
+                      <Label>Language</Label>
+                      <Select value={plotSettings.language} onValueChange={(value) => setPlotSettings({ ...plotSettings, language: value as Language })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select language" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {options.languages.map((lang) => (
+                            <SelectItem key={lang.value} value={lang.value}>{lang.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    {/* Hide scene count for Series as it's determined by the episode structure/AI */}
+                    {(!initialData?.scriptType || (initialData.scriptType !== ScriptType.TV_SERIES && initialData.scriptType !== ScriptType.WEB_SERIES)) && (
+                      <div>
+                        <Label>Number of Scenes (Range: 5-150)</Label>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setPlotSettings({ ...plotSettings, scenesNumber: Math.max(5, plotSettings.scenesNumber - 1) })}
+                            disabled={plotSettings.scenesNumber <= 5}
+                          >
+                            -
+                          </Button>
+                          <Input
+                            type="number"
+                            min="5"
+                            max="150"
+                            value={plotSettings.scenesNumber}
+                            onChange={(e) => {
+                              let value = parseInt(e.target.value) || 15;
+                              if (value > 150) value = 150;
+                              setPlotSettings({ ...plotSettings, scenesNumber: value });
+                            }}
+                            className="text-center"
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setPlotSettings({ ...plotSettings, scenesNumber: Math.min(150, plotSettings.scenesNumber + 1) })}
+                            disabled={plotSettings.scenesNumber >= 150}
+                          >
+                            +
+                          </Button>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Range: 5-150 scenes • Current: {plotSettings.scenesNumber} scenes
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setCurrentStep('synopsis')}>
+                      <ArrowLeft className="mr-2 h-4 w-4" />
+                      Back to Treatment
+                    </Button>
+                    <Button onClick={handleGenerateScript} className="bg-primary">
+                      <Sparkles className="mr-2 h-4 w-4" />
+                      Generate Professional Screenplay
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card >
+            );
+          })()}
+        </div >
+      )
+      }
+
+      {/* Step 3: Generating Script */}
+      {
+        currentStep === 'generating' && (
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>
+                  {isMultiEpisode
+                    ? "Generating Full Season Season S01"
+                    : "Generating Professional Industry-Standard Screenplay"
+                  }
+                </CardTitle>
+                <p className="text-muted-foreground">
+                  {isMultiEpisode
+                    ? "Creating each episode with distinct plot beats and formatting each for production readiness"
+                    : "Creating your full-length screenplay with proper formatting in batches for maximum detail"
+                  }
+                </p>
+              </CardHeader>
+              <CardContent>
+                <div className="text-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-primary" />
+                  <h3 className="text-lg font-semibold">
+                    {isMultiEpisode
+                      ? `Generating Episode ${currentEpisodeIndex} of ${totalEpisodes}`
+                      : "Generating Professional Screenplay"
+                    }
+                  </h3>
+                  <p className="text-muted-foreground mb-6">
+                    Batch {currentBatch} of {totalBatches} • {isMultiEpisode ? "Episode scenes in progress" : "Processing scenes with full dialogue and action"}
+                  </p>
+
+                  <div className="max-w-md mx-auto mb-6">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span>Total Progress</span>
+                      <span>{isMultiEpisode ? Math.round(((currentEpisodeIndex - 1) / totalEpisodes) * 100 + (generationProgress / totalEpisodes)) : Math.round(generationProgress)}%</span>
+                    </div>
+                    <Progress
+                      value={isMultiEpisode ? ((currentEpisodeIndex - 1) / totalEpisodes) * 100 + (generationProgress / totalEpisodes) : generationProgress}
+                      className="h-2 mb-4"
+                    />
+
+                    {isMultiEpisode && (
+                      <div className="mt-4">
+                        <div className="flex justify-between text-xs mb-1">
+                          <span>Episode {currentEpisodeIndex} Content</span>
+                          <span>{Math.round(generationProgress)}%</span>
+                        </div>
+                        <Progress value={generationProgress} className="h-1 bg-muted/50" />
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="space-y-2 text-sm text-muted-foreground">
+                    <p>✓ Creating full scenes with detailed dialogue and action</p>
+                    <p>✓ Applying professional screenplay formatting standards</p>
+                    <p>✓ Developing authentic character interactions</p>
+                    <p>✓ Building rich visual storytelling elements</p>
+                    <p>✓ Ensuring proper scene structure and pacing</p>
+                    <p>✓ Adding cultural authenticity and depth</p>
+                    <p>✓ Implementing intelligent element parsing</p>
+                    <p>✓ Processing in batches for maximum detail</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )
+      }
+    </div >
+  );
+}
