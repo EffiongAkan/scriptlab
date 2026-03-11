@@ -21,6 +21,7 @@ export interface ScriptData {
   language?: string;
   script_type?: string;
   film_industry?: string;
+  treatment?: string;
 }
 
 export const useScriptContent = (scriptId: string) => {

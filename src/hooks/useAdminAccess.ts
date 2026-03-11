@@ -6,6 +6,14 @@ import { useToast } from '@/hooks/use-toast';
 export function useAdminAccess() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [permissions, setPermissions] = useState<Record<string, boolean>>({
+    canManageUsers: false,
+    canManageSubscriptions: false,
+    canManageSystem: false,
+    canViewAnalytics: false,
+    canSendNotifications: false,
+    canManageAdmins: false
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -28,60 +36,56 @@ export function useAdminAccess() {
 
         console.log('Checking admin status for user:', user.id);
 
-        // First check if any admin exists at all using the edge function
+        // Check if any admin exists at all using the edge function
         const { data: adminExistsData, error: adminExistsError } = await supabase.functions.invoke('admin-operations', {
           body: { operation: 'check_admin_exists' }
         });
 
         if (adminExistsError) {
           console.error('Error checking if admin exists:', adminExistsError);
-          // If we can't check via function, try direct query as fallback
-          const { data: directCheck, error: directError } = await supabase
-            .from('admin_users')
-            .select('id')
-            .eq('is_active', true)
-            .limit(1);
-
-          if (directError) {
-            console.error('Direct admin check also failed:', directError);
-            // If all checks fail, assume no admin exists and allow first user to be admin
-            setIsAdmin(true);
-            setLoading(false);
-            return;
-          }
-
-          const adminExists = directCheck && directCheck.length > 0;
-          console.log('Direct check - Admin exists:', adminExists);
-
-          if (!adminExists) {
-            // No admin exists, this user can be the first admin
-            setIsAdmin(true);
-            setLoading(false);
-            return;
-          }
-        } else {
-          const adminExists = adminExistsData?.adminExists;
-          console.log('Function check - Admin exists:', adminExists);
-
-          if (!adminExists) {
-            // No admin exists, this user can be the first admin
-            setIsAdmin(true);
-            setLoading(false);
-            return;
-          }
+          // FALLBACK: Security first, don't allow access if check fails
+          setIsAdmin(false);
+          setLoading(false);
+          return;
         }
 
-        // Check if current user is admin
+        const adminExists = adminExistsData?.adminExists;
+        console.log('Admin existence check:', adminExists);
+
+        if (!adminExists) {
+          // SPECIAL CASE: If no admin exists, only allow specific emails to initialize
+          const authorizedEmails = ['uploadakan@gmail.com', 'pelicanink2025@gmail.com'];
+          if (user.email && authorizedEmails.includes(user.email)) {
+            console.log('First-time setup: Authorized super admin detected');
+            setIsAdmin(true);
+          } else {
+            console.log('No admin exists but user is not authorized for initial setup');
+            setIsAdmin(false);
+          }
+          setLoading(false);
+          return;
+        }
+
+        // Check if current user is admin in the database and get role details
         const { data: userAdminData, error: userAdminError } = await supabase
           .from('admin_users')
-          .select('*')
+          .select(`
+            *,
+            admin_roles (
+              can_manage_users,
+              can_manage_subscriptions,
+              can_manage_system,
+              can_view_analytics,
+              can_send_notifications,
+              can_manage_admins
+            )
+          `)
           .eq('user_id', user.id)
           .eq('is_active', true)
           .maybeSingle();
 
         if (userAdminError) {
           console.error('Error checking user admin status:', userAdminError);
-          // Deny access on error - security first
           setIsAdmin(false);
           setError('Failed to verify admin status. Please try again.');
         } else {
@@ -89,7 +93,16 @@ export function useAdminAccess() {
           console.log('User admin status:', isUserAdmin);
           setIsAdmin(isUserAdmin);
 
-          if (isUserAdmin) {
+          if (isUserAdmin && userAdminData.admin_roles) {
+            const roles: any = userAdminData.admin_roles;
+            setPermissions({
+              canManageUsers: roles.can_manage_users || false,
+              canManageSubscriptions: roles.can_manage_subscriptions || false,
+              canManageSystem: roles.can_manage_system || false,
+              canViewAnalytics: roles.can_view_analytics || false,
+              canSendNotifications: roles.can_send_notifications || false,
+              canManageAdmins: roles.can_manage_admins || false
+            });
             // Check if super admin
             const { data: isSuper, error: superError } = await (supabase.rpc as any)('is_super_admin', {
               user_id: user.id
@@ -103,9 +116,8 @@ export function useAdminAccess() {
 
       } catch (err) {
         console.error('Error in admin access check:', err);
-        // Deny access on error - security first
         setIsAdmin(false);
-        setError('An error occurred while checking admin access. Please try again.');
+        setError('An error occurred while checking admin access.');
       } finally {
         setLoading(false);
       }
@@ -159,6 +171,7 @@ export function useAdminAccess() {
   return {
     isAdmin,
     isSuperAdmin,
+    permissions,
     loading,
     error,
     createFirstAdmin

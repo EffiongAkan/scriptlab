@@ -125,6 +125,54 @@ export const SmartScriptInput = ({
     }
   }, [value]);
 
+  // Handle case transformations (Uppercase/Lowercase)
+  useEffect(() => {
+    const handleTransformCase = (event: any) => {
+      if (document.activeElement !== contentRef.current) return;
+
+      const { mode } = event.detail;
+      const selection = window.getSelection();
+      if (!selection || selection.rangeCount === 0) return;
+
+      const range = selection.getRangeAt(0);
+      const selectedText = range.toString();
+
+      if (!selectedText) return;
+
+      const transformedText = mode === 'uppercase'
+        ? selectedText.toUpperCase()
+        : selectedText.toLowerCase();
+
+      // Delete the current selection and insert the transformed text
+      range.deleteContents();
+      const textNode = document.createTextNode(transformedText);
+      range.insertNode(textNode);
+
+      // Select the transformed text back
+      const newRange = document.createRange();
+      newRange.setStart(textNode, 0);
+      newRange.setEnd(textNode, transformedText.length);
+      selection.removeAllRanges();
+      selection.addRange(newRange);
+
+      // Trigger change
+      const newValue = contentRef.current?.textContent || '';
+
+      // Mark user as actively typing to block incoming syncs
+      isTypingRef.current = true;
+      if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = setTimeout(() => {
+        isTypingRef.current = false;
+      }, 500);
+
+      isInternalChangeRef.current = true;
+      onChange(newValue);
+    };
+
+    document.addEventListener('script-transform-case' as any, handleTransformCase);
+    return () => document.removeEventListener('script-transform-case' as any, handleTransformCase);
+  }, [onChange]);
+
   // Calculate dropdown position based on cursor
   const updateDropdownPosition = useCallback(() => {
     if (!contentRef.current) return;

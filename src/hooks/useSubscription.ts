@@ -73,28 +73,38 @@ export function useSubscription() {
     }
   };
 
-  const upgradeSubscription = async (tier: SubscriptionTier) => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return false;
+  const upgradeSubscription = async (tier: SubscriptionTier, interval: 'month' | 'year' = 'month'): Promise<{ success: boolean; error?: string }> => {
+    try {
+      setLoading(true);
 
-    // For manual/admin upgrade (no Stripe). In production, this gets called after payment webhook.
-    const endsAt = new Date();
-    endsAt.setMonth(endsAt.getMonth() + 1);
+      // Determine if we're downgrading to free
+      if (tier === 'free') {
+        console.warn("Downgrading to free requires cancellation via Paystack.");
+        return { success: false, error: 'To cancel your subscription, please contact support.' };
+      }
 
-    const { error } = await supabase.from('subscriptions').upsert({
-      user_id: user.id,
-      tier,
-      status: 'active',
-      started_at: new Date().toISOString(),
-      ends_at: endsAt.toISOString(),
-      updated_at: new Date().toISOString(),
-    }, { onConflict: 'user_id' });
+      const { data, error } = await supabase.functions.invoke('create-checkout-session', {
+        body: { tier, interval }
+      });
 
-    if (!error) {
-      await checkSubscription();
-      return true;
+      // Supabase wraps errors; also check data.error for backend use case
+      const errorMsg = error?.message || data?.error || null;
+
+      if (errorMsg) throw new Error(errorMsg);
+
+      if (data?.url) {
+        // Redirect to Paystack Checkout
+        window.location.href = data.url;
+        return { success: true };
+      } else {
+        throw new Error('No checkout URL returned from payment server.');
+      }
+    } catch (error: any) {
+      console.error('Error initiating checkout:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
     }
-    return false;
   };
 
   const getLimits = () => PLAN_LIMITS[subscription.tier];

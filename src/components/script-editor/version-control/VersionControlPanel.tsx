@@ -10,6 +10,12 @@ import { BranchManager } from './BranchManager';
 import { ConflictResolver } from './ConflictResolver';
 import { VersionComparison } from './VersionComparison';
 import { useToast } from '@/hooks/use-toast';
+import { useVersionControl } from '@/hooks/useVersionControl';
+import { useScriptContent } from '@/hooks/useScriptContent';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Save } from 'lucide-react';
 
 interface VersionControlPanelProps {
   scriptId: string;
@@ -23,19 +29,42 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
   const [selectedVersions, setSelectedVersions] = useState<string[]>([]);
   const [activeBranch, setActiveBranch] = useState('main');
   const [hasConflicts, setHasConflicts] = useState(false);
+
+  // Save Version Dialog state
+  const [isCommitDialogOpen, setIsCommitDialogOpen] = useState(false);
+  const [commitMessage, setCommitMessage] = useState('');
+  const [versionPrefix, setVersionPrefix] = useState('1.0');
+
   const { toast } = useToast();
 
-  const handleCreateBranch = (branchName: string) => {
-    toast({
-      title: "Branch Created",
-      description: `Successfully created branch "${branchName}"`,
-    });
+  const { elements, scriptData } = useScriptContent(scriptId);
+  const { versions, fetchVersions, saveVersion, restoreVersion } = useVersionControl(scriptId);
+
+  // Auto-increment version number roughly based on existing count
+  const nextVersionNumber = `${versionPrefix}.${versions.length + 1}`;
+
+  const handleCreateBranch = async (branchName: string) => {
+    if (elements && scriptId) {
+      const success = await saveVersion(
+        elements,
+        `Initial commit for branch ${branchName}`,
+        nextVersionNumber,
+        branchName
+      );
+      if (success) {
+        setActiveBranch(branchName);
+        toast({
+          title: "Branch Created",
+          description: `Successfully created and checked out branch "${branchName}"`,
+        });
+      }
+    }
   };
 
   const handleMergeBranch = (sourceBranch: string, targetBranch: string) => {
     // Simulate conflict detection
     const hasConflict = Math.random() > 0.7;
-    
+
     if (hasConflict) {
       setHasConflicts(true);
       toast({
@@ -51,11 +80,26 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
     }
   };
 
-  const handleVersionRestore = (versionId: string) => {
-    toast({
-      title: "Version Restored",
-      description: `Successfully restored to version ${versionId}`,
-    });
+  const handleVersionRestore = async (versionId: string) => {
+    const success = await restoreVersion(versionId);
+    if (success) {
+      window.location.reload(); // Quick refresh of context/editor data
+    }
+  };
+
+  const handleSaveVersion = async () => {
+    if (!commitMessage.trim()) {
+      toast({ title: "Required", description: "Please enter a version message", variant: "destructive" });
+      return;
+    }
+
+    if (elements && scriptId) {
+      const success = await saveVersion(elements, commitMessage, nextVersionNumber, activeBranch);
+      if (success) {
+        setIsCommitDialogOpen(false);
+        setCommitMessage('');
+      }
+    }
   };
 
   return (
@@ -67,8 +111,45 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
             Track changes, create branches, and manage script versions
           </p>
         </div>
-        
+
         <div className="flex items-center gap-2">
+          {scriptId ? (
+            <Dialog open={isCommitDialogOpen} onOpenChange={setIsCommitDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-2">
+                  <Save className="h-4 w-4" />
+                  Save Version
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Save New Version</DialogTitle>
+                  <DialogDescription>
+                    Store a snapshot of the current script. You can restore it anytime.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid gap-2">
+                    <Label>Version Number</Label>
+                    <Input disabled value={`v${nextVersionNumber}`} />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="message">Commit Message</Label>
+                    <Input
+                      id="message"
+                      placeholder="e.g., Rewrote Act 2 Opening"
+                      value={commitMessage}
+                      onChange={(e) => setCommitMessage(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setIsCommitDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleSaveVersion}>Save Commit</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          ) : null}
           <Badge variant="outline" className="flex items-center gap-1">
             <GitBranch className="h-3 w-3" />
             {activeBranch}
@@ -111,6 +192,7 @@ export const VersionControlPanel: React.FC<VersionControlPanelProps> = ({
         <TabsContent value="branches" className="mt-6">
           <BranchManager
             scriptId={scriptId}
+            versions={versions}
             activeBranch={activeBranch}
             onBranchChange={setActiveBranch}
             onCreateBranch={handleCreateBranch}

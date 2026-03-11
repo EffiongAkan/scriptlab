@@ -87,10 +87,11 @@ interface SystemHealth {
 
 export default function AdminDashboard() {
   const { toast } = useToast();
-  const { isSuperAdmin, loading: accessLoading } = useAdminAccess();
+  const { isSuperAdmin, permissions, loading: accessLoading } = useAdminAccess();
   const [users, setUsers] = useState<DetailedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [systemSettings, setSystemSettings] = useState<Record<string, any>>({});
+  const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, boolean>>({});
   const [systemHealth, setSystemHealth] = useState<SystemHealth>({
     database_status: 'healthy',
     api_status: 'healthy',
@@ -188,32 +189,50 @@ export default function AdminDashboard() {
     }
   ]);
 
-  const [adminRoles] = useState([
-    {
-      id: '1',
-      name: 'Super Admin',
-      level: 10,
-      permissions: ['all'],
-      color: 'red',
-      canManageUsers: true,
-      canManageSubscriptions: true,
-      canManageSystem: true,
-      canViewAnalytics: true,
-      canSendNotifications: true,
-      canManageAdmins: true
-    }
-  ]);
+  const [adminRoles, setAdminRoles] = useState<any[]>([]);
+  const [adminUsers, setAdminUsers] = useState<any[]>([]);
 
-  const [adminUsers] = useState([
-    {
-      id: '1',
-      user_id: 'current-user',
-      email: 'admin@example.com',
-      role_id: '1',
-      created_at: '2024-06-01T00:00:00Z',
-      is_active: true
+  const fetchAdminRoles = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_roles' as any)
+        .select('*')
+        .order('level', { ascending: false });
+
+      if (error) throw error;
+
+      const mappedRoles = (data || []).map((role: any) => ({
+        ...role,
+        canManageUsers: role.can_manage_users,
+        canManageSubscriptions: role.can_manage_subscriptions,
+        canManageSystem: role.can_manage_system,
+        canViewAnalytics: role.can_view_analytics,
+        canSendNotifications: role.can_send_notifications,
+        canManageAdmins: role.can_manage_admins
+      }));
+
+      setAdminRoles(mappedRoles);
+    } catch (error: any) {
+      console.error('Error fetching admin roles:', error);
     }
-  ]);
+  };
+
+  const fetchAdminUsers = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('admin_users')
+        .select(`
+          *,
+          role:admin_roles(name, level)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setAdminUsers(data || []);
+    } catch (error: any) {
+      console.error('Error fetching admin users:', error);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -298,7 +317,7 @@ export default function AdminDashboard() {
       // Fetch comprehensive system statistics
       const [scriptsResponse, subscriptionsResponse, creditsResponse] = await Promise.all([
         supabase.from('scripts').select('id', { count: 'exact', head: true }),
-        supabase.from('subscribers').select('id', { count: 'exact', head: true }),
+        supabase.from('subscriptions').select('id', { count: 'exact', head: true }),
         supabase.from('profiles').select('ai_credits')
       ]);
 
@@ -364,6 +383,8 @@ export default function AdminDashboard() {
 
   useEffect(() => {
     fetchUsers();
+    fetchAdminRoles();
+    fetchAdminUsers();
     fetchSystemStats();
     fetchSystemSettings();
     checkSystemHealth();
@@ -534,6 +555,7 @@ export default function AdminDashboard() {
     }
   };
 
+
   return (
     <AdminAccessGate>
       <div className="container mx-auto p-6 space-y-6">
@@ -635,338 +657,458 @@ export default function AdminDashboard() {
           </Card>
         </div>
 
-        <Tabs defaultValue="users" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9">
-            <TabsTrigger value="users">Users</TabsTrigger>
-            <TabsTrigger value="subscriptions">Plans</TabsTrigger>
-            <TabsTrigger value="notifications">Notifications</TabsTrigger>
-            <TabsTrigger value="admins">Admin Levels</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-            <TabsTrigger value="invites">Admin Invites</TabsTrigger>
-            <TabsTrigger value="ai-cache">AI Cache</TabsTrigger>
-            <TabsTrigger value="system">System</TabsTrigger>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-          </TabsList>
+        <Tabs
+          defaultValue={
+            isSuperAdmin || permissions.canManageUsers ? "users" :
+              (permissions.canManageSubscriptions ? "subscriptions" :
+                (permissions.canSendNotifications ? "notifications" :
+                  (permissions.canManageAdmins ? "admins" :
+                    (permissions.canViewAnalytics ? "analytics" :
+                      (permissions.canManageSystem ? "system" : "")))))
+          }
+          className="space-y-4"
+        >
+          <div className="overflow-x-auto -mx-2 px-2">
+            <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-9 h-auto flex-wrap md:flex-nowrap gap-1">
+              {(isSuperAdmin || permissions.canManageUsers) && (
+                <TabsTrigger value="users" className="text-xs whitespace-nowrap">Users</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageSubscriptions) && (
+                <TabsTrigger value="subscriptions" className="text-xs whitespace-nowrap">Plans</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canSendNotifications) && (
+                <TabsTrigger value="notifications" className="text-xs whitespace-nowrap">Notifications</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageAdmins) && (
+                <TabsTrigger value="admins" className="text-xs whitespace-nowrap">Admin Levels</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canViewAnalytics) && (
+                <TabsTrigger value="analytics" className="text-xs whitespace-nowrap">Analytics</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageAdmins) && (
+                <TabsTrigger value="invites" className="text-xs whitespace-nowrap">Admin Invites</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageSystem) && (
+                <TabsTrigger value="ai-cache" className="text-xs whitespace-nowrap">AI Cache</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageSystem) && (
+                <TabsTrigger value="system" className="text-xs whitespace-nowrap">System</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageSystem) && (
+                <TabsTrigger value="settings" className="text-xs whitespace-nowrap">Settings</TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
-          <TabsContent value="users" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="space-y-1">
-                    <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5" />
-                      Advanced User Management
-                    </CardTitle>
-                    <CardDescription>
-                      Comprehensive user account management with detailed profiles and controls
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
-                      <Select value={userSortBy} onValueChange={(v: any) => setUserSortBy(v)}>
-                        <SelectTrigger className="w-[140px] h-8 text-xs">
-                          <ArrowUpDown className="h-3 w-3 mr-2" />
-                          <SelectValue placeholder="Sort By" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="newest">Newest First</SelectItem>
-                          <SelectItem value="oldest">Oldest First</SelectItem>
-                          <SelectItem value="email">Email (A-Z)</SelectItem>
-                          <SelectItem value="credits">Most Credits</SelectItem>
-                          <SelectItem value="scripts">Most Scripts</SelectItem>
-                        </SelectContent>
-                      </Select>
-
-                      <ToggleGroup type="single" value={userViewMode} onValueChange={(v) => v && setUserViewMode(v as any)} className="bg-background rounded-md border">
-                        <ToggleGroupItem value="grid" className="h-8 w-8 p-0" aria-label="Grid view">
-                          <LayoutGrid className="h-4 w-4" />
-                        </ToggleGroupItem>
-                        <ToggleGroupItem value="list" className="h-8 w-8 p-0" aria-label="List view">
-                          <List className="h-4 w-4" />
-                        </ToggleGroupItem>
-                      </ToggleGroup>
-                    </div>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                {loading ? (
-                  <div className="flex flex-col items-center justify-center py-12 space-y-4">
-                    <Activity className="h-8 w-8 animate-spin text-primary" />
-                    <p className="text-muted-foreground animate-pulse">Loading users...</p>
-                  </div>
-                ) : userViewMode === 'grid' ? (
-                  <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {sortedUsers.map((user) => (
-                      <DetailedUserCard
-                        key={user.id}
-                        user={user}
-                        onUpdateUser={handleUpdateUser}
-                        onDeleteUser={handleDeleteUser}
-                        onSendNotification={(userId) => console.log('Send notification to', userId)}
-                      />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-md border overflow-hidden">
-                    <div className="overflow-x-auto">
-                      <table className="w-full text-sm text-left">
-                        <thead className="bg-muted/50 text-muted-foreground font-medium border-b text-xs uppercase tracking-wider">
-                          <tr>
-                            <th className="px-4 py-3">User</th>
-                            <th className="px-4 py-3">Status</th>
-                            <th className="px-4 py-3">Joined</th>
-                            <th className="px-4 py-3 text-center">Scripts</th>
-                            <th className="px-4 py-3 text-center">Credits</th>
-                            <th className="px-4 py-3 text-right">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="divide-y">
-                          {sortedUsers.map((user) => (
-                            <tr key={user.id} className="hover:bg-muted/30 transition-colors">
-                              <td className="px-4 py-3">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <Avatar className="h-8 w-8">
-                                    <AvatarImage src={user.profile?.avatar_url} />
-                                    <AvatarFallback>{user.profile?.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()}</AvatarFallback>
-                                  </Avatar>
-                                  <div className="flex flex-col overflow-hidden">
-                                    <span className="font-medium truncate">{user.profile?.full_name || 'Unknown'}</span>
-                                    <span className="text-xs text-muted-foreground truncate">{user.email}</span>
-                                  </div>
-                                </div>
-                              </td>
-                              <td className="px-4 py-3">
-                                <Badge className={`text-[10px] px-1.5 py-0 h-5 border-none ${user.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
-                                  user.status === 'paused' ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' :
-                                    'bg-red-100 text-red-700 hover:bg-red-100'
-                                  }`}>
-                                  {user.status}
-                                </Badge>
-                              </td>
-                              <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                                {new Date(user.created_at).toLocaleDateString()}
-                              </td>
-                              <td className="px-4 py-3 text-center font-mono">
-                                {user.activity?.scripts_count || 0}
-                              </td>
-                              <td className="px-4 py-3 text-center font-mono text-primary font-semibold">
-                                {user.profile?.ai_credits || 0}
-                              </td>
-                              <td className="px-4 py-3 text-right">
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUpdateUser(user.id, { status: user.status === 'active' ? 'paused' : 'active' })}>
-                                    {user.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 text-green-600" />}
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSendNotification({ user_id: user.id, email: user.email })}>
-                                    <Mail className="h-4 w-4" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDeleteUser(user.id)}>
-                                    <Trash2 className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="subscriptions" className="space-y-4">
-            <SubscriptionPlanManager
-              plans={subscriptionPlans}
-              onCreatePlan={async (newPlanData) => {
-                try {
-                  const id = newPlanData.name.toLowerCase().replace(/\s+/g, '-');
-                  const { error } = await supabase
-                    .from('subscription_plans' as any)
-                    .insert({
-                      id,
-                      name: newPlanData.name,
-                      description: newPlanData.description,
-                      monthly_price: newPlanData.price,
-                      yearly_price: newPlanData.yearlyPrice || newPlanData.price * 10,
-                      features: newPlanData.features,
-                      limits: newPlanData.limits,
-                      is_active: newPlanData.isActive,
-                      is_popular: (newPlanData as any).popular || false
-                    });
-
-                  if (error) throw error;
-
-                  await fetchSubscriptionPlans();
-                  toast({ title: "Success", description: "Plan created and saved to database" });
-                } catch (error: any) {
-                  console.error('Error creating plan:', error);
-                  toast({ title: "Error", description: error.message, variant: "destructive" });
-                }
-              }}
-              onUpdatePlan={async (planId, updates) => {
-                try {
-                  const { error } = await supabase
-                    .from('subscription_plans' as any)
-                    .update({
-                      name: updates.name,
-                      description: updates.description,
-                      monthly_price: updates.price,
-                      yearly_price: (updates as any).yearlyPrice || (updates.price ? updates.price * 10 : undefined),
-                      features: updates.features,
-                      limits: updates.limits,
-                      is_active: updates.isActive,
-                      is_popular: (updates as any).popular
-                    })
-                    .eq('id', planId);
-
-                  if (error) throw error;
-
-                  await fetchSubscriptionPlans();
-                  toast({ title: "Success", description: "Plan updated in database" });
-                } catch (error: any) {
-                  console.error('Error updating plan:', error);
-                  toast({ title: "Error", description: error.message, variant: "destructive" });
-                }
-              }}
-              onDeletePlan={async (planId) => {
-                try {
-                  const { error } = await supabase
-                    .from('subscription_plans' as any)
-                    .delete()
-                    .eq('id', planId);
-
-                  if (error) throw error;
-
-                  await fetchSubscriptionPlans();
-                  toast({ title: "Deleted", description: "Plan removed from database" });
-                } catch (error: any) {
-                  console.error('Error deleting plan:', error);
-                  toast({ title: "Error", description: error.message, variant: "destructive" });
-                }
-              }}
-            />
-          </TabsContent>
-
-          <TabsContent value="notifications" className="space-y-4">
-            <NotificationManager
-              users={users.map(u => ({ id: u.id, email: u.email, full_name: u.profile?.full_name }))}
-              templates={notificationTemplates}
-              history={notificationHistory}
-              onSendNotification={handleSendNotification}
-              onSaveTemplate={(template) => console.log('Save template:', template)}
-            />
-          </TabsContent>
-
-          <TabsContent value="admins" className="space-y-4">
-            <AdminLevelManager
-              roles={adminRoles}
-              admins={adminUsers}
-              permissions={[]}
-              onCreateRole={(role) => console.log('Create role:', role)}
-              onUpdateRole={(roleId, updates) => console.log('Update role:', roleId, updates)}
-              onDeleteRole={(roleId) => console.log('Delete role:', roleId)}
-              onUpdateAdminRole={(adminId, roleId) => console.log('Update admin role:', adminId, roleId)}
-              onToggleAdminStatus={(adminId, isActive) => console.log('Toggle admin status:', adminId, isActive)}
-            />
-          </TabsContent>
-
-          <TabsContent value="analytics" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Activity className="h-5 w-5" />
-                  System Analytics
-                </CardTitle>
-                <CardDescription>
-                  Comprehensive system usage and performance metrics
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">{stats.totalUsers}</div>
-                    <div className="text-sm text-muted-foreground">Total Users</div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">{stats.activeUsers}</div>
-                    <div className="text-sm text-muted-foreground">Active This Month</div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">{stats.conversionRate.toFixed(1)}%</div>
-                    <div className="text-sm text-muted-foreground">Conversion Rate</div>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <div className="text-2xl font-bold">${stats.totalRevenue}</div>
-                    <div className="text-sm text-muted-foreground">Monthly Revenue</div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="invites" className="space-y-4">
-            {isSuperAdmin ? (
-              <AdminInvitationManager />
-            ) : (
-              <Card className="border-destructive/20 bg-destructive/5">
+          {(isSuperAdmin || permissions.canManageUsers) && (
+            <TabsContent value="users" className="space-y-4">
+              <Card>
                 <CardHeader>
-                  <div className="flex items-center gap-2">
-                    <Shield className="h-5 w-5 text-destructive" />
-                    <CardTitle>Access Denied</CardTitle>
+                  <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <CardTitle className="flex items-center gap-2">
+                        <Users className="h-5 w-5" />
+                        Advanced User Management
+                      </CardTitle>
+                      <CardDescription>
+                        Comprehensive user account management with detailed profiles and controls
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
+                        <Select value={userSortBy} onValueChange={(v: any) => setUserSortBy(v)}>
+                          <SelectTrigger className="w-[140px] h-8 text-xs">
+                            <ArrowUpDown className="h-3 w-3 mr-2" />
+                            <SelectValue placeholder="Sort By" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="newest">Newest First</SelectItem>
+                            <SelectItem value="oldest">Oldest First</SelectItem>
+                            <SelectItem value="email">Email (A-Z)</SelectItem>
+                            <SelectItem value="credits">Most Credits</SelectItem>
+                            <SelectItem value="scripts">Most Scripts</SelectItem>
+                          </SelectContent>
+                        </Select>
+
+                        <ToggleGroup type="single" value={userViewMode} onValueChange={(v) => v && setUserViewMode(v as any)} className="bg-background rounded-md border">
+                          <ToggleGroupItem value="grid" className="h-8 w-8 p-0" aria-label="Grid view">
+                            <LayoutGrid className="h-4 w-4" />
+                          </ToggleGroupItem>
+                          <ToggleGroupItem value="list" className="h-8 w-8 p-0" aria-label="List view">
+                            <List className="h-4 w-4" />
+                          </ToggleGroupItem>
+                        </ToggleGroup>
+                      </div>
+                    </div>
                   </div>
+                </CardHeader>
+                <CardContent>
+                  {loading ? (
+                    <div className="flex flex-col items-center justify-center py-12 space-y-4">
+                      <Activity className="h-8 w-8 animate-spin text-primary" />
+                      <p className="text-muted-foreground animate-pulse">Loading users...</p>
+                    </div>
+                  ) : userViewMode === 'grid' ? (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+                      {sortedUsers.map((user) => (
+                        <DetailedUserCard
+                          key={user.id}
+                          user={user}
+                          onUpdateUser={handleUpdateUser}
+                          onDeleteUser={handleDeleteUser}
+                          onSendNotification={(userId) => console.log('Send notification to', userId)}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="rounded-md border overflow-hidden">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-left">
+                          <thead className="bg-muted/50 text-muted-foreground font-medium border-b text-xs uppercase tracking-wider">
+                            <tr>
+                              <th className="px-4 py-3">User</th>
+                              <th className="px-4 py-3">Status</th>
+                              <th className="px-4 py-3">Joined</th>
+                              <th className="px-4 py-3 text-center">Scripts</th>
+                              <th className="px-4 py-3 text-center">Credits</th>
+                              <th className="px-4 py-3 text-right">Actions</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y">
+                            {sortedUsers.map((user) => (
+                              <tr key={user.id} className="hover:bg-muted/30 transition-colors">
+                                <td className="px-4 py-3">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    <Avatar className="h-8 w-8">
+                                      <AvatarImage src={user.profile?.avatar_url} />
+                                      <AvatarFallback>{user.profile?.full_name?.charAt(0) || user.email.charAt(0).toUpperCase()}</AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex flex-col overflow-hidden">
+                                      <span className="font-medium truncate">{user.profile?.full_name || 'Unknown'}</span>
+                                      <span className="text-xs text-muted-foreground truncate">{user.email}</span>
+                                    </div>
+                                  </div>
+                                </td>
+                                <td className="px-4 py-3">
+                                  <Badge className={`text-[10px] px-1.5 py-0 h-5 border-none ${user.status === 'active' ? 'bg-green-100 text-green-700 hover:bg-green-100' :
+                                    user.status === 'paused' ? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-100' :
+                                      'bg-red-100 text-red-700 hover:bg-red-100'
+                                    }`}>
+                                    {user.status}
+                                  </Badge>
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
+                                  {new Date(user.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-4 py-3 text-center font-mono">
+                                  {user.activity?.scripts_count || 0}
+                                </td>
+                                <td className="px-4 py-3 text-center font-mono text-primary font-semibold">
+                                  {user.profile?.ai_credits || 0}
+                                </td>
+                                <td className="px-4 py-3 text-right">
+                                  <div className="flex items-center justify-end gap-1">
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUpdateUser(user.id, { status: user.status === 'active' ? 'paused' : 'active' })}>
+                                      {user.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 text-green-600" />}
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleSendNotification({ user_id: user.id, email: user.email })}>
+                                      <Mail className="h-4 w-4" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => handleDeleteUser(user.id)}>
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageSubscriptions) && (
+            <TabsContent value="subscriptions" className="space-y-4">
+              <SubscriptionPlanManager
+                plans={subscriptionPlans}
+                onCreatePlan={async (newPlanData) => {
+                  try {
+                    const id = newPlanData.name.toLowerCase().replace(/\s+/g, '-');
+                    const { error } = await supabase
+                      .from('subscription_plans' as any)
+                      .insert({
+                        id,
+                        name: newPlanData.name,
+                        description: newPlanData.description,
+                        monthly_price: newPlanData.price,
+                        yearly_price: newPlanData.yearlyPrice || newPlanData.price * 10,
+                        features: newPlanData.features,
+                        limits: newPlanData.limits,
+                        is_active: newPlanData.isActive,
+                        is_popular: (newPlanData as any).popular || false
+                      });
+
+                    if (error) throw error;
+
+                    await fetchSubscriptionPlans();
+                    toast({ title: "Success", description: "Plan created and saved to database" });
+                  } catch (error: any) {
+                    console.error('Error creating plan:', error);
+                    toast({ title: "Error", description: error.message, variant: "destructive" });
+                  }
+                }}
+                onUpdatePlan={async (planId, updates) => {
+                  try {
+                    const { error } = await supabase
+                      .from('subscription_plans' as any)
+                      .update({
+                        name: updates.name,
+                        description: updates.description,
+                        monthly_price: updates.price,
+                        yearly_price: (updates as any).yearlyPrice || (updates.price ? updates.price * 10 : undefined),
+                        features: updates.features,
+                        limits: updates.limits,
+                        is_active: updates.isActive,
+                        is_popular: (updates as any).popular
+                      })
+                      .eq('id', planId);
+
+                    if (error) throw error;
+
+                    await fetchSubscriptionPlans();
+                    toast({ title: "Success", description: "Plan updated in database" });
+                  } catch (error: any) {
+                    console.error('Error updating plan:', error);
+                    toast({ title: "Error", description: error.message, variant: "destructive" });
+                  }
+                }}
+                onDeletePlan={async (planId) => {
+                  try {
+                    const { error } = await supabase
+                      .from('subscription_plans' as any)
+                      .delete()
+                      .eq('id', planId);
+
+                    if (error) throw error;
+
+                    await fetchSubscriptionPlans();
+                    toast({ title: "Deleted", description: "Plan removed from database" });
+                  } catch (error: any) {
+                    console.error('Error deleting plan:', error);
+                    toast({ title: "Error", description: error.message, variant: "destructive" });
+                  }
+                }}
+              />
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canSendNotifications) && (
+            <TabsContent value="notifications" className="space-y-4">
+              <NotificationManager
+                users={users.map(u => ({ id: u.id, email: u.email, full_name: u.profile?.full_name }))}
+                templates={notificationTemplates}
+                history={notificationHistory}
+                onSendNotification={handleSendNotification}
+                onSaveTemplate={(template) => console.log('Save template:', template)}
+              />
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageAdmins) && (
+            <TabsContent value="admins" className="space-y-4">
+              <AdminLevelManager
+                roles={adminRoles}
+                admins={adminUsers}
+                permissions={[]}
+                onCreateRole={async (role: any) => {
+                  try {
+                    const dbRole = {
+                      name: role.name,
+                      level: role.level,
+                      color: role.color,
+                      can_manage_users: role.canManageUsers,
+                      can_manage_subscriptions: role.canManageSubscriptions,
+                      can_manage_system: role.canManageSystem,
+                      can_view_analytics: role.canViewAnalytics,
+                      can_send_notifications: role.canSendNotifications,
+                      can_manage_admins: role.canManageAdmins
+                    };
+                    const { data, error } = await supabase.from('admin_roles' as any).insert([dbRole]).select().single();
+                    if (error) throw error;
+
+                    const mappedRole = {
+                      ...data,
+                      canManageUsers: data.can_manage_users,
+                      canManageSubscriptions: data.can_manage_subscriptions,
+                      canManageSystem: data.can_manage_system,
+                      canViewAnalytics: data.can_view_analytics,
+                      canSendNotifications: data.can_send_notifications,
+                      canManageAdmins: data.can_manage_admins
+                    };
+                    setAdminRoles(prev => [...prev, mappedRole]);
+                    toast({ title: 'Role Created', description: `"${role.name}" role has been created successfully.` });
+                  } catch (error: any) {
+                    toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                  }
+                }}
+                onUpdateRole={async (roleId, updates: any) => {
+                  try {
+                    const dbUpdates: any = { ...updates };
+                    if ('canManageUsers' in updates) dbUpdates.can_manage_users = updates.canManageUsers;
+                    if ('canManageSubscriptions' in updates) dbUpdates.can_manage_subscriptions = updates.canManageSubscriptions;
+                    if ('canManageSystem' in updates) dbUpdates.can_manage_system = updates.canManageSystem;
+                    if ('canViewAnalytics' in updates) dbUpdates.can_view_analytics = updates.canViewAnalytics;
+                    if ('canSendNotifications' in updates) dbUpdates.can_send_notifications = updates.canSendNotifications;
+                    if ('canManageAdmins' in updates) dbUpdates.can_manage_admins = updates.canManageAdmins;
+
+                    delete dbUpdates.canManageUsers;
+                    delete dbUpdates.canManageSubscriptions;
+                    delete dbUpdates.canManageSystem;
+                    delete dbUpdates.canViewAnalytics;
+                    delete dbUpdates.canSendNotifications;
+                    delete dbUpdates.canManageAdmins;
+
+                    const { error } = await supabase.from('admin_roles' as any).update(dbUpdates).eq('id', roleId);
+                    if (error) throw error;
+                    setAdminRoles(prev => prev.map(r => r.id === roleId ? { ...r, ...updates } : r));
+                    toast({ title: 'Role Updated', description: 'Admin role has been updated.' });
+                  } catch (error: any) {
+                    toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                  }
+                }}
+                onDeleteRole={async (roleId) => {
+                  try {
+                    const { error } = await supabase.from('admin_roles' as any).delete().eq('id', roleId);
+                    if (error) throw error;
+                    setAdminRoles(prev => prev.filter(r => r.id !== roleId));
+                    toast({ title: 'Role Deleted', description: 'Admin role has been removed.' });
+                  } catch (error: any) {
+                    toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                  }
+                }}
+                onUpdateAdminRole={async (adminId, roleId) => {
+                  try {
+                    const { error } = await supabase.from('admin_users').update({ role_id: roleId }).eq('id', adminId);
+                    if (error) throw error;
+                    setAdminUsers(prev => prev.map(a => a.id === adminId ? { ...a, role_id: roleId } : a));
+                  } catch (error: any) {
+                    toast({ title: 'Error', description: error.message, variant: 'destructive' });
+                  }
+                }}
+                onToggleAdminStatus={(adminId, isActive) => console.log('Toggle admin status:', adminId, isActive)}
+              />
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canViewAnalytics) && (
+            <TabsContent value="analytics" className="space-y-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Activity className="h-5 w-5" />
+                    System Analytics
+                  </CardTitle>
                   <CardDescription>
-                    Only Super Admins can manage invitation passcodes.
+                    Comprehensive system usage and performance metrics
                   </CardDescription>
                 </CardHeader>
-              </Card>
-            )}
-          </TabsContent>
-
-          <TabsContent value="ai-cache" className="space-y-4">
-            <GlobalCacheMonitor />
-          </TabsContent>
-
-          <TabsContent value="system" className="space-y-4">
-            <AIModelSelector onUpdateSetting={handleUpdateSetting} />
-
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Server className="h-5 w-5" />
-                  System Configuration
-                </CardTitle>
-                <CardDescription>
-                  Configure system-wide settings and maintenance
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <div className="font-medium">Maintenance Mode</div>
-                      <div className="text-sm text-muted-foreground">Disable all user access except admins</div>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-2xl font-bold">{stats.totalUsers}</div>
+                      <div className="text-sm text-muted-foreground">Total Users</div>
                     </div>
-                    <button
-                      onClick={() => handleUpdateSetting('maintenance_mode', !systemSettings.maintenance_mode)}
-                      className={`px-4 py-2 rounded-md ${systemSettings.maintenance_mode ? 'bg-red-600 text-white' : 'bg-secondary'}`}
-                    >
-                      {systemSettings.maintenance_mode ? 'Disable' : 'Enable'}
-                    </button>
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-2xl font-bold">{stats.activeUsers}</div>
+                      <div className="text-sm text-muted-foreground">Active This Month</div>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-2xl font-bold">{stats.conversionRate.toFixed(1)}%</div>
+                      <div className="text-sm text-muted-foreground">Conversion Rate</div>
+                    </div>
+                    <div className="p-4 border rounded-lg">
+                      <div className="text-2xl font-bold">${stats.totalRevenue}</div>
+                      <div className="text-sm text-muted-foreground">Monthly Revenue</div>
+                    </div>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
 
-          <TabsContent value="settings" className="space-y-4">
-            <SystemSettingsManager
-              settings={systemSettings}
-              onUpdateSetting={handleUpdateSetting}
-            />
-          </TabsContent>
+          {(isSuperAdmin || permissions.canManageAdmins) && (
+            <TabsContent value="invites" className="space-y-4">
+              {isSuperAdmin ? (
+                <AdminInvitationManager />
+              ) : (
+                <Card className="border-destructive/20 bg-destructive/5">
+                  <CardHeader>
+                    <div className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-destructive" />
+                      <CardTitle>Access Denied</CardTitle>
+                    </div>
+                    <CardDescription>
+                      Only Super Admins can manage invitation passcodes.
+                    </CardDescription>
+                  </CardHeader>
+                </Card>
+              )}
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageSystem) && (
+            <TabsContent value="ai-cache" className="space-y-4">
+              <GlobalCacheMonitor />
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageSystem) && (
+            <TabsContent value="system" className="space-y-4">
+              <AIModelSelector onUpdateSetting={handleUpdateSetting} />
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    System Configuration
+                  </CardTitle>
+                  <CardDescription>
+                    Configure system-wide settings and maintenance
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <div className="font-medium">Maintenance Mode</div>
+                        <div className="text-sm text-muted-foreground">Disable all user access except admins</div>
+                      </div>
+                      <button
+                        onClick={() => handleUpdateSetting('maintenance_mode', !systemSettings.maintenance_mode)}
+                        className={`px-4 py-2 rounded-md ${systemSettings.maintenance_mode ? 'bg-red-600 text-white' : 'bg-secondary'}`}
+                      >
+                        {systemSettings.maintenance_mode ? 'Disable' : 'Enable'}
+                      </button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageSystem) && (
+            <TabsContent value="settings" className="space-y-4">
+              <SystemSettingsManager
+                settings={systemSettings}
+                apiKeyStatuses={apiKeyStatuses}
+                onUpdateSetting={handleUpdateSetting}
+              />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </AdminAccessGate>

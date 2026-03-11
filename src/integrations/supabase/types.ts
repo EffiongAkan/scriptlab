@@ -981,6 +981,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_script_invitation: {
+        Args: { p_invitation_id: string }
+        Returns: Json
+      }
       add_user_credits: {
         Args: { credits_to_add: number; target_user_id: string }
         Returns: {

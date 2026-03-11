@@ -8,10 +8,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 
 interface AIModelSelectorProps {
+    apiKeyStatuses?: Record<string, boolean>;
     onUpdateSetting: (key: string, value: any) => Promise<void>;
 }
 
-export const AIModelSelector: React.FC<AIModelSelectorProps> = ({ onUpdateSetting }) => {
+export const AIModelSelector: React.FC<AIModelSelectorProps> = ({ apiKeyStatuses, onUpdateSetting }) => {
     const [loading, setLoading] = useState(false);
     const [activeProvider, setActiveProvider] = useState('deepseek');
     const [activeModel, setActiveModel] = useState('deepseek-chat');
@@ -115,10 +116,20 @@ export const AIModelSelector: React.FC<AIModelSelectorProps> = ({ onUpdateSettin
         try {
             await onUpdateSetting('active_ai_provider', activeProvider);
             await onUpdateSetting('active_ai_model', activeModel);
-            await onUpdateSetting('openai_api_key', apiKeys.openai);
-            await onUpdateSetting('anthropic_api_key', apiKeys.anthropic);
-            await onUpdateSetting('xai_api_key', apiKeys.xai);
-            await onUpdateSetting('deepseek_api_key', apiKeys.deepseek);
+
+            // Only update keys if they have been typed into
+            if (apiKeys.openai) await onUpdateSetting('openai_api_key', apiKeys.openai);
+            if (apiKeys.anthropic) await onUpdateSetting('anthropic_api_key', apiKeys.anthropic);
+            if (apiKeys.xai) await onUpdateSetting('xai_api_key', apiKeys.xai);
+            if (apiKeys.deepseek) await onUpdateSetting('deepseek_api_key', apiKeys.deepseek);
+
+            // Clear the inputs after saving to enforce write-only UI
+            setApiKeys({
+                openai: '',
+                anthropic: '',
+                xai: '',
+                deepseek: ''
+            });
 
             toast({
                 title: "All Settings Saved",
@@ -223,45 +234,58 @@ export const AIModelSelector: React.FC<AIModelSelectorProps> = ({ onUpdateSettin
                             <Shield className="h-4 w-4" />
                             API Provider Credentials
                         </h3>
-                        <p className="text-sm text-muted-foreground">
-                            Configure the API keys for each provider. These are required if not set in environment variables.
+                        <p className="text-sm border border-amber-500/20 bg-amber-500/10 text-amber-600 dark:text-amber-400 p-3 rounded-md mb-4 flex items-center gap-2">
+                            <Shield className="h-4 w-4 shrink-0" />
+                            For security, existing API keys cannot be viewed. Enter a new key below to overwrite an existing one.
                         </p>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="space-y-2">
-                                <Label>OpenAI API Key</Label>
+                                <Label className="flex justify-between">
+                                    OpenAI API Key
+                                    {apiKeyStatuses?.openai_api_key && <span className="text-[10px] text-green-500 font-normal border border-green-500/20 bg-green-500/10 px-1 rounded">Key Configured</span>}
+                                </Label>
                                 <Input
                                     type="password"
                                     value={apiKeys.openai}
                                     onChange={(e) => setApiKeys(prev => ({ ...prev, openai: e.target.value }))}
-                                    placeholder="sk-..."
+                                    placeholder={apiKeyStatuses?.openai_api_key ? "•••••••••••••••••••• (Enter new key to overwrite)" : "sk-..."}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>Anthropic API Key</Label>
+                                <Label className="flex justify-between">
+                                    Anthropic API Key
+                                    {apiKeyStatuses?.anthropic_api_key && <span className="text-[10px] text-green-500 font-normal border border-green-500/20 bg-green-500/10 px-1 rounded">Key Configured</span>}
+                                </Label>
                                 <Input
                                     type="password"
                                     value={apiKeys.anthropic}
                                     onChange={(e) => setApiKeys(prev => ({ ...prev, anthropic: e.target.value }))}
-                                    placeholder="sk-ant-..."
+                                    placeholder={apiKeyStatuses?.anthropic_api_key ? "•••••••••••••••••••• (Enter new key to overwrite)" : "sk-ant-..."}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>xAI API Key</Label>
+                                <Label className="flex justify-between">
+                                    xAI API Key
+                                    {apiKeyStatuses?.xai_api_key && <span className="text-[10px] text-green-500 font-normal border border-green-500/20 bg-green-500/10 px-1 rounded">Key Configured</span>}
+                                </Label>
                                 <Input
                                     type="password"
                                     value={apiKeys.xai}
                                     onChange={(e) => setApiKeys(prev => ({ ...prev, xai: e.target.value }))}
-                                    placeholder="xai-..."
+                                    placeholder={apiKeyStatuses?.xai_api_key ? "•••••••••••••••••••• (Enter new key to overwrite)" : "xai-..."}
                                 />
                             </div>
                             <div className="space-y-2">
-                                <Label>DeepSeek API Key</Label>
+                                <Label className="flex justify-between">
+                                    DeepSeek API Key
+                                    {apiKeyStatuses?.deepseek_api_key && <span className="text-[10px] text-green-500 font-normal border border-green-500/20 bg-green-500/10 px-1 rounded">Key Configured</span>}
+                                </Label>
                                 <Input
                                     type="password"
                                     value={apiKeys.deepseek}
                                     onChange={(e) => setApiKeys(prev => ({ ...prev, deepseek: e.target.value }))}
-                                    placeholder="sk-..."
+                                    placeholder={apiKeyStatuses?.deepseek_api_key ? "•••••••••••••••••••• (Enter new key to overwrite)" : "sk-..."}
                                 />
                             </div>
                         </div>

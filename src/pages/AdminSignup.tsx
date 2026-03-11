@@ -30,7 +30,8 @@ export default function AdminSignup() {
             user_id: userId,
             email: userEmail,
             role: 'admin',
-            is_active: true
+            is_active: false,
+            status: 'pending'
           }
         ]);
 
@@ -49,7 +50,7 @@ export default function AdminSignup() {
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (password !== confirmPassword) {
       toast({
         title: "Error",
@@ -72,7 +73,7 @@ export default function AdminSignup() {
 
     try {
       console.log('Starting admin signup process...');
-      
+
       // Sign up the user
       const { data: signupData, error: signupError } = await supabase.auth.signUp({
         email,
@@ -104,11 +105,11 @@ export default function AdminSignup() {
         // User needs email confirmation
         toast({
           title: "Email Confirmation Required",
-          description: adminCreated 
-            ? "Please check your email and click the confirmation link to complete your admin account setup. Admin privileges are ready to activate."
+          description: adminCreated
+            ? "Please verify your email. Once verified, your admin account will be pending approval from a Super Admin."
             : "Please check your email to confirm your account. You may need to contact support for admin privileges.",
         });
-        
+
         setTimeout(() => navigate('/auth'), 3000);
         return;
       }
@@ -116,10 +117,10 @@ export default function AdminSignup() {
       // User is automatically confirmed
       if (adminCreated) {
         toast({
-          title: "Success",
-          description: "Admin account created successfully! Redirecting to admin dashboard...",
+          title: "Signup Successful",
+          description: "Your admin account has been created and is pending approval from a Super Admin. You will not have admin access until approved.",
         });
-        setTimeout(() => navigate('/admin'), 2000);
+        setTimeout(() => navigate('/auth'), 3000);
       } else {
         toast({
           title: "Partial Success",
@@ -132,7 +133,7 @@ export default function AdminSignup() {
     } catch (error) {
       console.error('Signup error:', error);
       let errorMessage = "Failed to create admin account";
-      
+
       if (error instanceof Error) {
         if (error.message.includes('User already registered')) {
           errorMessage = "An account with this email already exists. Please sign in instead.";
@@ -144,7 +145,7 @@ export default function AdminSignup() {
           errorMessage = error.message;
         }
       }
-      
+
       toast({
         title: "Error",
         description: errorMessage,
@@ -172,7 +173,7 @@ export default function AdminSignup() {
               This will create an admin account with full system privileges. Make sure you're authorized to create admin accounts.
             </AlertDescription>
           </Alert>
-          
+
           <form onSubmit={handleSignup} className="space-y-4">
             <div>
               <Label htmlFor="fullName">Full Name</Label>
@@ -186,7 +187,7 @@ export default function AdminSignup() {
                 placeholder="Enter your full name"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="email">Email</Label>
               <Input
@@ -199,7 +200,7 @@ export default function AdminSignup() {
                 placeholder="Enter your email address"
               />
             </div>
-            
+
             <div>
               <Label htmlFor="password">Password</Label>
               <div className="relative mt-1">
@@ -227,7 +228,7 @@ export default function AdminSignup() {
                 </Button>
               </div>
             </div>
-            
+
             <div>
               <Label htmlFor="confirmPassword">Confirm Password</Label>
               <Input
@@ -240,12 +241,12 @@ export default function AdminSignup() {
                 placeholder="Confirm your password"
               />
             </div>
-            
+
             <Button type="submit" className="w-full" disabled={loading}>
               {loading ? 'Creating Admin Account...' : 'Create Admin Account'}
             </Button>
           </form>
-          
+
           <div className="mt-4 text-center">
             <Button
               variant="link"

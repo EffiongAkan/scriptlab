@@ -18,19 +18,20 @@ export const useScriptMetadata = () => {
   const saveScriptMetadata = async (
     scriptId: string,
     userId: string,
-    title: string
+    title: string,
+    treatment?: string
   ): Promise<boolean> => {
     try {
       console.log('Saving script metadata for ID:', scriptId);
       console.log('Saving title:', title);
-      
+
       // Check if script exists
       const { data: scriptData, error: scriptCheckError } = await supabase
         .from('scripts')
         .select('id, title')
         .eq('id', scriptId)
         .maybeSingle();
-        
+
       if (scriptCheckError) {
         console.error('Error checking script existence:', scriptCheckError);
         return false;
@@ -39,11 +40,16 @@ export const useScriptMetadata = () => {
       // If script exists, update it
       if (scriptData) {
         console.log('Updating existing script title to:', title);
+        const updatePayload: any = { title };
+        if (treatment !== undefined) {
+          updatePayload.treatment = treatment;
+        }
+
         const { error: updateError } = await supabase
           .from('scripts')
-          .update({ title })
+          .update(updatePayload)
           .eq('id', scriptId);
-          
+
         if (updateError) {
           console.error('Error updating script title:', updateError);
           toast({
@@ -54,18 +60,24 @@ export const useScriptMetadata = () => {
           return false;
         }
         return true;
-      } 
+      }
       // If script doesn't exist, create it
       else {
         console.log('Creating new script with ID:', scriptId);
+        const insertPayload: any = {
+          id: scriptId,
+          title: title || 'Untitled Script',
+          user_id: userId
+        };
+
+        if (treatment !== undefined) {
+          insertPayload.treatment = treatment;
+        }
+
         const { error: createError } = await supabase
           .from('scripts')
-          .insert({
-            id: scriptId,
-            title: title || 'Untitled Script',
-            user_id: userId
-          });
-          
+          .insert(insertPayload);
+
         if (createError) {
           console.error('Error creating script:', createError);
           toast({

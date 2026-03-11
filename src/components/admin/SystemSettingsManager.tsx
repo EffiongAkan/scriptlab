@@ -13,7 +13,6 @@ import {
     Cpu,
     AlertTriangle,
     Eye,
-    EyeOff,
     Save,
     Lock
 } from 'lucide-react';
@@ -21,20 +20,17 @@ import { useToast } from '@/hooks/use-toast';
 
 interface SystemSettingsManagerProps {
     settings: Record<string, any>;
+    apiKeyStatuses: Record<string, boolean>;
     onUpdateSetting: (key: string, value: any) => Promise<void>;
 }
 
 export const SystemSettingsManager: React.FC<SystemSettingsManagerProps> = ({
     settings,
+    apiKeyStatuses,
     onUpdateSetting
 }) => {
     const { toast } = useToast();
-    const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
     const [isSaving, setIsSaving] = useState<string | null>(null);
-
-    const toggleKeyVisibility = (key: string) => {
-        setShowKeys(prev => ({ ...prev, [key]: !prev[key] }));
-    };
 
     const handleSave = async (key: string, value: any) => {
         try {
@@ -56,34 +52,28 @@ export const SystemSettingsManager: React.FC<SystemSettingsManagerProps> = ({
     };
 
     const renderApiKeyItem = (label: string, key: string) => {
-        const value = settings[key] || '';
+        // We no longer read the value from settings because RLS blocks it.
+        // We rely on the parent component to tell us if a key exists via `apiKeyStatuses`.
+        // However, we need to add that prop first. For now, we assume it exists if it's in the original settings (which it won't be soon).
         return (
             <div className="space-y-2">
                 <div className="flex items-center justify-between">
                     <Label htmlFor={key} className="text-sm font-medium">{label}</Label>
-                    <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 px-2 text-xs"
-                        onClick={() => toggleKeyVisibility(key)}
-                    >
-                        {showKeys[key] ? <EyeOff className="h-3 w-3 mr-1" /> : <Eye className="h-3 w-3 mr-1" />}
-                        {showKeys[key] ? 'Hide' : 'Show'}
-                    </Button>
+                    <Badge variant="outline" className="text-[10px] h-5 bg-muted/50">Write-Only</Badge>
                 </div>
                 <div className="flex gap-2">
                     <Input
                         id={key}
-                        type={showKeys[key] ? "text" : "password"}
-                        value={value}
+                        type="password"
                         onChange={(e) => { }} // Local state would be better for bulk save, but following dashboard pattern
                         onBlur={(e) => {
-                            if (e.target.value !== value) {
+                            if (e.target.value) {
                                 handleSave(key, e.target.value);
+                                e.target.value = ''; // Clear after save attempt
                             }
                         }}
-                        placeholder={`Enter ${label}...`}
-                        className="font-mono text-sm"
+                        placeholder="•••••••••••••••••••• (Enter new key to overwrite)"
+                        className="font-mono text-sm placeholder:text-muted-foreground/50"
                     />
                     <Button
                         size="icon"
@@ -91,12 +81,18 @@ export const SystemSettingsManager: React.FC<SystemSettingsManagerProps> = ({
                         disabled={isSaving === key}
                         onClick={() => {
                             const input = document.getElementById(key) as HTMLInputElement;
-                            handleSave(key, input.value);
+                            if (input.value) {
+                                handleSave(key, input.value);
+                                input.value = ''; // Clear after save attempt
+                            }
                         }}
                     >
                         <Save className={`h-4 w-4 ${isSaving === key ? 'animate-spin' : ''}`} />
                     </Button>
                 </div>
+                <p className="text-[10px] text-muted-foreground pt-1 flex items-center gap-1">
+                    <Shield className="h-3 w-3" /> For security, existing keys cannot be viewed.
+                </p>
             </div>
         );
     };

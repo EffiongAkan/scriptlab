@@ -46,7 +46,6 @@ export function AppSidebar() {
     { name: "Dashboard", href: "/dashboard", icon: Home },
     { name: "AI Plot Generator", href: "/plot-generator", icon: Wand2 },
     { name: "Monetization", href: "/monetization", icon: DollarSign },
-    { name: "Business Tools", href: "/business", icon: Briefcase },
     { name: "Premium", href: "/premium", icon: Crown },
   ];
 

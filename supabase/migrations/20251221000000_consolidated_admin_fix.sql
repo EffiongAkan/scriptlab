@@ -106,15 +106,10 @@ CREATE POLICY "Admins can view all admin records" ON public.admin_users
   TO authenticated
   USING (public.is_admin(auth.uid()));
 
-CREATE POLICY "Admins can manage admin records" ON public.admin_users
+CREATE POLICY "Super Admins can manage admin records" ON public.admin_users
   FOR ALL
   TO authenticated
-  USING (public.is_admin(auth.uid()));
-
-CREATE POLICY "Users can insert own admin record" ON public.admin_users
-  FOR INSERT
-  TO authenticated
-  WITH CHECK (user_id = auth.uid());
+  USING (public.is_super_admin(auth.uid()));
 
 -- 8. Create trigger function to auto-assign Super Admin role
 CREATE OR REPLACE FUNCTION public.auto_assign_super_admin_role()

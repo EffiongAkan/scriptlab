@@ -36,12 +36,12 @@ export const HeroSection: React.FC = () => {
             className="bg-naija-green hover:bg-naija-gold text-white hover:text-black font-bold px-8 py-4 text-lg drop-shadow ring-2 ring-naija-gold focus-visible:ring-4 focus-visible:ring-naija-gold-dark"
             aria-label="Start Writing Now"
           >
-            <Link to="/dashboard">
+            <Link to="/auth">
               Start Writing Now
             </Link>
           </Button>
           <Link
-            to="/plot"
+            to="/auth"
             className="ml-0 xs:ml-2 font-semibold rounded px-4 py-3 text-naija-green bg-white dark:bg-[#181c1b] border border-naija-green shadow-xs hover:bg-naija-gold/10 transition-colors inline-block"
             aria-label="Try AI Story Generator"
           >

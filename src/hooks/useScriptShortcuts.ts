@@ -91,6 +91,16 @@ export function useScriptShortcuts() {
                 duration: 2000,
               });
               break;
+            case 'U':
+              e.preventDefault();
+              const upperEvent = new CustomEvent('script-transform-case', { detail: { mode: 'uppercase' } });
+              document.dispatchEvent(upperEvent);
+              break;
+            case 'L':
+              e.preventDefault();
+              const lowerEvent = new CustomEvent('script-transform-case', { detail: { mode: 'lowercase' } });
+              document.dispatchEvent(lowerEvent);
+              break;
           }
         }
 
@@ -133,7 +143,7 @@ export function useScriptShortcuts() {
         e.preventDefault();
         toast({
           title: "Keyboard Shortcuts",
-          description: "Ctrl+Shift+H: Heading, Ctrl+Shift+A: Action, Ctrl+Shift+C: Character, Ctrl+Shift+D: Dialogue, Ctrl+Shift+P: Parenthetical, Ctrl+Shift+T: Transition, Ctrl+Z: Undo, Ctrl+Shift+Z: Redo, Ctrl+S: Save",
+          description: "Ctrl+Shift+H: Heading, Ctrl+Shift+A: Action, Ctrl+Shift+C: Character, Ctrl+Shift+D: Dialogue, Ctrl+Shift+P: Parenthetical, Ctrl+Shift+T: Transition, Ctrl+Shift+U: Uppercase, Ctrl+Shift+L: Lowercase, Ctrl+Z: Undo, Ctrl+Shift+Z: Redo, Ctrl+S: Save",
           duration: 8000,
         });
       }

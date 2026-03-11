@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Bold, Italic, AlignLeft, AlignCenter, AlignRight, ZoomIn, ZoomOut, PanelLeft, PanelLeftClose, Type, ListChecks, Camera, MessageSquare, Plus, Keyboard } from "lucide-react";
+import { Bold, Italic, AlignLeft, AlignCenter, AlignRight, ZoomIn, ZoomOut, PanelLeft, PanelLeftClose, Type, ListChecks, Camera, MessageSquare, Plus, Keyboard, CaseUpper, CaseLower } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
@@ -12,6 +12,10 @@ interface ScriptFormatToolbarProps {
   onInsertElement: (type: string) => void;
   onToggleSceneNav: () => void;
   isSceneNavOpen: boolean;
+  /** Type of the currently focused script element (mobile type-switcher) */
+  activeElementType?: string | null;
+  /** Called when user taps a type chip in the mobile type-switcher */
+  onChangeElementType?: (newType: string) => void;
 }
 
 export const ScriptFormatToolbar = ({
@@ -19,11 +23,46 @@ export const ScriptFormatToolbar = ({
   onZoomChange,
   onInsertElement,
   onToggleSceneNav,
-  isSceneNavOpen
+  isSceneNavOpen,
+  activeElementType,
+  onChangeElementType,
 }: ScriptFormatToolbarProps) => {
+  const ELEMENT_TYPES = [
+    { type: 'heading', label: 'H', fullLabel: 'Scene Heading' },
+    { type: 'action', label: 'A', fullLabel: 'Action' },
+    { type: 'character', label: 'C', fullLabel: 'Character' },
+    { type: 'dialogue', label: 'D', fullLabel: 'Dialogue' },
+    { type: 'parenthetical', label: 'P', fullLabel: 'Parenthetical' },
+    { type: 'transition', label: 'T', fullLabel: 'Transition' },
+  ];
+
   return (
-    <div className="p-2 bg-[#1E1E1E] border-b border-gray-800 flex flex-wrap items-center justify-between gap-2 shadow-sm">
-      <div className="flex items-center justify-between gap-1 sm:gap-2 w-full">
+    <div className="bg-[#1E1E1E] border-b border-gray-800 shadow-sm">
+      {/* Mobile-only: Element Type Quick-Switcher */}
+      {onChangeElementType && (
+        <div className="sm:hidden flex items-center gap-1.5 px-3 py-2 border-b border-gray-800/60 overflow-x-auto">
+          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest shrink-0 mr-1">Type:</span>
+          {ELEMENT_TYPES.map(({ type, label, fullLabel }) => {
+            const isActive = activeElementType === type;
+            return (
+              <button
+                key={type}
+                onClick={() => onChangeElementType(type)}
+                className={`shrink-0 h-8 px-3 rounded-full text-xs font-bold border transition-colors touch-manipulation ${isActive
+                    ? 'bg-naija-green text-white border-naija-green shadow-lg shadow-naija-green/30'
+                    : 'bg-gray-800/70 text-gray-400 border-gray-700 hover:bg-gray-700 hover:text-gray-200'
+                  }`}
+                title={fullLabel}
+              >
+                {label}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Main toolbar row */}
+      <div className="py-1 px-2 md:p-2 flex flex-wrap items-center justify-between gap-1">
         {/* Left section: Scene Nav Toggle */}
         <div className="flex items-center gap-1">
           <TooltipProvider>
@@ -32,10 +71,10 @@ export const ScriptFormatToolbar = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-9 w-9 sm:h-8 sm:w-8 touch-manipulation text-gray-400 hover:text-white"
+                  className="h-8 w-8 sm:h-8 sm:w-8 touch-manipulation text-gray-400 hover:text-white"
                   onClick={onToggleSceneNav}
                 >
-                  {isSceneNavOpen ? <PanelLeftClose className="h-4 w-4 sm:h-4 sm:w-4" /> : <PanelLeft className="h-4 w-4 sm:h-4 sm:w-4" />}
+                  {isSceneNavOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
@@ -51,8 +90,8 @@ export const ScriptFormatToolbar = ({
           <div className="sm:hidden">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 touch-manipulation text-gray-400 hover:text-white">
-                  <Plus className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="h-8 w-8 touch-manipulation text-gray-400 hover:text-white">
+                  <Plus className="h-4 w-4" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-48 bg-[#1E1E1E] border-gray-800 text-gray-300">
@@ -76,7 +115,6 @@ export const ScriptFormatToolbar = ({
             </DropdownMenu>
           </div>
 
-          {/* Desktop: Individual Buttons */}
           <div className="hidden sm:flex items-center gap-1">
             {[
               { type: 'heading', icon: Type, label: 'Add Scene Heading' },
@@ -102,11 +140,58 @@ export const ScriptFormatToolbar = ({
                 </Tooltip>
               </TooltipProvider>
             ))}
+
+            <div className="w-[1px] h-4 bg-gray-700 mx-1" />
+
+            {/* Case Transformations */}
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-gray-400 hover:text-white"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const event = new CustomEvent('script-transform-case', { detail: { mode: 'uppercase' } });
+                      document.dispatchEvent(event);
+                    }}
+                  >
+                    <CaseUpper className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Uppercase (Ctrl+Shift+U)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-gray-400 hover:text-white"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => {
+                      const event = new CustomEvent('script-transform-case', { detail: { mode: 'lowercase' } });
+                      document.dispatchEvent(event);
+                    }}
+                  >
+                    <CaseLower className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>Lowercase (Ctrl+Shift+L)</p>
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </div>
 
-        {/* Right section: Shortcuts & Zoom Controls */}
-        <div className="flex items-center gap-2">
+        {/* Right section: Shortcuts & Zoom Controls (Hidden on mobile) */}
+        <div className="hidden sm:flex items-center gap-2">
           {/* Shortcuts Button */}
           <TooltipProvider>
             <Tooltip>

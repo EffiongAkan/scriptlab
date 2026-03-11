@@ -39,38 +39,40 @@ export function Layout({ children }: LayoutProps) {
           "flex flex-col flex-1",
           isEditor ? "h-screen overflow-hidden" : "min-h-screen overflow-hidden"
         )}>
-          {/* Fixed Top Navigation Bar */}
-          <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
-            <div className="flex h-14 items-center gap-2 px-3 md:px-6">
-              {/* Mobile Menu */}
-              <Sheet>
-                <SheetTrigger asChild className="md:hidden">
-                  <Button variant="ghost" size="icon">
-                    <Menu className="h-5 w-5" />
-                  </Button>
-                </SheetTrigger>
-                <SheetContent side="left" className="p-0 w-64">
-                  <AppSidebar />
-                </SheetContent>
-              </Sheet>
+          {/* Fixed Top Navigation Bar - Hidden on mobile editor to save space */}
+          {(!isMobile || !isEditor) && (
+            <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
+              <div className="flex h-14 items-center gap-2 px-3 md:px-6">
+                {/* Mobile Menu */}
+                <Sheet>
+                  <SheetTrigger asChild className="md:hidden">
+                    <Button variant="ghost" size="icon">
+                      <Menu className="h-5 w-5" />
+                    </Button>
+                  </SheetTrigger>
+                  <SheetContent side="left" className="p-0 w-64">
+                    <AppSidebar />
+                  </SheetContent>
+                </Sheet>
 
-              {/* App Topbar */}
-              <div className="flex-1 overflow-hidden">
-                <AppTopbar />
+                {/* App Topbar */}
+                <div className="flex-1 overflow-hidden">
+                  <AppTopbar />
+                </div>
+
+                {/* Sign Out Button */}
+                <Button
+                  variant="ghost"
+                  size={isMobile ? "sm" : "default"}
+                  onClick={handleSignOut}
+                  className="shrink-0"
+                >
+                  <LogOut className="h-4 w-4 mr-1" />
+                  <span className="hidden sm:inline">Sign Out</span>
+                </Button>
               </div>
-
-              {/* Sign Out Button */}
-              <Button
-                variant="ghost"
-                size={isMobile ? "sm" : "default"}
-                onClick={handleSignOut}
-                className="shrink-0"
-              >
-                <LogOut className="h-4 w-4 mr-1" />
-                <span className="hidden sm:inline">Sign Out</span>
-              </Button>
-            </div>
-          </header>
+            </header>
+          )}
 
           {/* Main Content */}
           <main className={cn(

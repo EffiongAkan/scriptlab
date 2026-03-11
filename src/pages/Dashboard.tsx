@@ -4,11 +4,12 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScriptCard } from "@/components/dashboard/ScriptCard";
-import { FileText, BookOpen, Users, Upload } from "lucide-react";
+import { FileText, BookOpen, Users, Upload, Check, X } from "lucide-react";
 import { v4 as uuid } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Badge } from "@/components/ui/badge";
 import { SynopsisCard } from "@/components/dashboard/SynopsisCard";
 import { CharacterCardLite } from "@/components/dashboard/CharacterCardLite";
 import { fetchUserSynopses } from "@/services/synopsis-service";
@@ -16,6 +17,8 @@ import { fetchUserSavedCharacters } from "@/services/character-save-service";
 import { ScriptCreationDialog } from "@/components/common/ScriptCreationDialog";
 import { ScriptUploadDialog } from "@/components/dashboard/ScriptUploadDialog";
 import { UserProfileCard } from "@/components/dashboard/UserProfileCard";
+import { usePendingInvitations } from "@/hooks/usePendingInvitations";
+import { useInvitationActions } from "@/hooks/useInvitationActions";
 
 // Define simplified Script type for Dashboard use
 interface DashboardScript {
@@ -45,6 +48,24 @@ export default function Dashboard() {
   const [savedCharacters, setSavedCharacters] = useState([]);
   const [showScriptCreationDialog, setShowScriptCreationDialog] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const { pendingInvitations, isLoading: isLoadingInvitations } = usePendingInvitations();
+  const { acceptInvitation, rejectInvitation, isLoading: isInvokingAction } = useInvitationActions();
+
+  const handleAcceptInvite = async (inviteId: string) => {
+    const scriptId = await acceptInvitation(inviteId);
+    if (scriptId) {
+      setRefreshKey(prev => prev + 1);
+    }
+  };
+
+  const handleRejectInvite = async (inviteId: string) => {
+    const success = await rejectInvitation(inviteId);
+    if (success) {
+      setRefreshKey(prev => prev + 1);
+    }
+  };
 
   useEffect(() => {
     const fetchScripts = async () => {
@@ -167,7 +188,6 @@ export default function Dashboard() {
           .from('script_collaborators')
           .select(`
             script_id,
-            role,
             created_at,
             scripts (
               id,
@@ -211,7 +231,7 @@ export default function Dashboard() {
 
     fetchScripts();
     fetchSharedScripts();
-  }, [toast, navigate]);
+  }, [toast, navigate, refreshKey]);
 
   useEffect(() => {
     const fetchExtraContent = async () => {
@@ -303,16 +323,7 @@ export default function Dashboard() {
         key={script.id}
         script={script}
         onUpdate={() => {
-          // Re-fetch everything to ensure sync
-          // We can't easily call fetchScripts directly as it's in useEffect
-          // But we can force a re-render or trigger a state update
-          // A specialized refresh function would be better, but triggering navigate(0) is a hard refresh
-          // or we can refactor fetchScripts out.
-
-          // Better approach: Since fetchScripts is inside useEffect with no deps we can't call it.
-          // Let's rely on window.location.reload() for a hard sync or refactor.
-          // Refactoring is cleaner.
-          navigate(0);
+          setRefreshKey(prev => prev + 1);
         }}
       />
     ));
@@ -396,7 +407,14 @@ export default function Dashboard() {
         <TabsList className="mb-6 w-full sm:w-auto flex overflow-x-auto sm:overflow-visible">
           <TabsTrigger value="recent" className="flex-1 sm:flex-auto">Recent Scripts</TabsTrigger>
           <TabsTrigger value="all" className="flex-1 sm:flex-auto">All Scripts</TabsTrigger>
-          <TabsTrigger value="shared" className="flex-1 sm:flex-auto">Shared With Me</TabsTrigger>
+          <TabsTrigger value="shared" className="flex-1 sm:flex-auto relative">
+            Shared With Me
+            {pendingInvitations.length > 0 && (
+              <Badge variant="destructive" className="absolute -top-2 -right-2 px-1.5 min-w-[1.25rem] h-5 flex items-center justify-center rounded-full text-[10px]">
+                {pendingInvitations.length}
+              </Badge>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="generated" className="flex-1 sm:flex-auto">AI Generated</TabsTrigger>
         </TabsList>
 
@@ -438,26 +456,80 @@ export default function Dashboard() {
           </div>
         </TabsContent>
 
-        <TabsContent value="shared" className="mt-6">
-          {isLoadingShared ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {renderLoadingSkeletons()}
-            </div>
-          ) : sharedScripts.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                <Users className="h-8 w-8 text-gray-400" />
+        <TabsContent value="shared" className="mt-6 space-y-8">
+          {/* Pending Invitations Section */}
+          {pendingInvitations.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <Badge variant="destructive" className="bg-red-500">{pendingInvitations.length}</Badge>
+                Pending Invitations
+              </h3>
+              <div className="flex flex-col gap-2">
+                {pendingInvitations.map((invite) => (
+                  <div
+                    key={invite.id}
+                    className="flex items-center justify-between gap-4 px-4 py-3 rounded-lg border border-amber-500/30 bg-amber-500/10 hover:bg-amber-500/15 transition-colors"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-amber-400 uppercase tracking-wide mb-0.5">
+                        Collaboration Invite
+                      </p>
+                      <p className="text-sm text-white truncate">
+                        <span className="font-semibold">{invite.inviterEmail}</span>
+                        <span className="text-gray-300"> invited you to collaborate</span>
+                      </p>
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button
+                        size="sm"
+                        className="h-7 px-3 text-xs bg-naija-green hover:bg-naija-green-dark text-white"
+                        onClick={() => handleAcceptInvite(invite.id)}
+                        disabled={isInvokingAction}
+                      >
+                        <Check className="w-3 h-3 mr-1" />
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-7 px-3 text-xs border-red-500/50 text-red-400 hover:bg-red-500/10 hover:text-red-300"
+                        onClick={() => handleRejectInvite(invite.id)}
+                        disabled={isInvokingAction}
+                      >
+                        <X className="w-3 h-3 mr-1" />
+                        Reject
+                      </Button>
+                    </div>
+                  </div>
+                ))}
               </div>
-              <h3 className="text-lg font-medium text-gray-900">No shared scripts yet</h3>
-              <p className="text-sm text-gray-500 max-w-md mt-1">
-                When someone shares a script with you, it will appear here for collaborative editing.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {renderScriptCards(sharedScripts)}
             </div>
           )}
+
+          <div>
+            {pendingInvitations.length > 0 && (
+              <h3 className="text-lg font-semibold mb-4 text-gray-700">Active Collaborations</h3>
+            )}
+            {isLoadingShared ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {renderLoadingSkeletons()}
+              </div>
+            ) : sharedScripts.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                  <Users className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-lg font-medium text-gray-900">No shared scripts yet</h3>
+                <p className="text-sm text-gray-500 max-w-md mt-1">
+                  When someone shares a script with you, it will appear here for collaborative editing.
+                </p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {renderScriptCards(sharedScripts)}
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="generated" className="mt-6">

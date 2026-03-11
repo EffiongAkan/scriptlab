@@ -40,8 +40,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         id: 'pro',
         name: 'Professional',
         description: 'For serious scriptwriters and creators',
-        monthlyPrice: 19,
-        yearlyPrice: 190,
+        monthlyPrice: 25,
+        yearlyPrice: 250,
         features: [
             'Unlimited scripts',
             '100 AI credits / month',
@@ -61,8 +61,8 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         id: 'enterprise',
         name: 'Enterprise',
         description: 'Custom solutions for teams and studios',
-        monthlyPrice: 49,
-        yearlyPrice: 490,
+        monthlyPrice: 55,
+        yearlyPrice: 550,
         features: [
             'Everything in Professional',
             'Unlimited AI credits',

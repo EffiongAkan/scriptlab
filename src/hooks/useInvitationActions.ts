@@ -26,7 +26,9 @@ export const useInvitationActions = () => {
 
       console.log(`Inviting ${email} to collaborate on script ${scriptId} as ${role}`);
 
-      // Insert the invitation into the database
+      // Insert the invitation into the database.
+      // The `on_script_invitation_created` DB trigger automatically creates
+      // an in-app notification for the invitee (looks up via auth.users.email).
       const { data, error } = await supabase
         .from('script_invitations')
         .insert({
@@ -43,9 +45,8 @@ export const useInvitationActions = () => {
         throw error;
       }
 
-      // Send email notification (graceful degradation if service unavailable)
+      // Attempt to send an email notification via the Edge Function
       try {
-        // Create or get share link for the script
         const shareResult = await ScriptSharingService.createShareLink(scriptId, {
           type: 'email',
           accessLevel: 'comment',
@@ -53,14 +54,12 @@ export const useInvitationActions = () => {
         });
 
         if (shareResult.success && shareResult.shareUrl) {
-          // Get script title for better email
           const { data: script } = await supabase
             .from('scripts')
             .select('title')
             .eq('id', scriptId)
             .single();
 
-          // Try to send invitation email via Edge Function
           const emailResponse = await supabase.functions.invoke('send-invite-email', {
             body: {
               to: [email],
@@ -72,59 +71,15 @@ export const useInvitationActions = () => {
 
           if (emailResponse.error) {
             console.warn('Email sending not available:', emailResponse.error);
-            // Show user that email wasn't sent but invitation was created
-            toast({
-              title: "Invitation created",
-              description: `Important: Email notifications are not configured. ${email} must check their invitations in-app.`,
-              duration: 6000,
-            });
           } else {
             console.log('Invitation email sent successfully');
           }
         }
       } catch (emailError: any) {
-        // Email service not configured or failed - this is okay
-        console.warn('Email service unavailable:', emailError.message);
-        toast({
-          title: "Invitation created",
-          description: `Important: ${email} must check their invitations in-app (email notifications not configured).`,
-          duration: 6000,
-        });
+        // Email service not configured or failed - this is non-blocking
+        console.warn('Email service unavailable:', emailError?.message);
       }
 
-      // TODO: Uncomment after running database migration
-      // Create notification for invitee (if they have an account)
-      // try {
-      //   const { data: inviteeUser } = await supabase
-      //     .from('profiles')
-      //     .select('id')
-      //     .eq('email', email)
-      //     .single();
-
-      //   if (inviteeUser) {
-      //     // Get script title
-      //     const { data: script } = await supabase
-      //       .from('scripts')
-      //       .select('title')
-      //       .eq('id', scriptId)
-      //       .single();
-
-      //     await supabase
-      //       .from('notifications')
-      //       .insert({
-      //         user_id: inviteeUser.id,
-      //         title: 'New Collaboration Invitation',
-      //         message: `You've been invited to collaborate on "${script?.title || 'a script'}" as ${role}`,
-      //         type: 'invitation',
-      //         action_url: `/dashboard` // Can be updated to specific invitation page
-      //       });
-      //   }
-      // } catch (notifError) {
-      //   // Notification creation failure shouldn't block invitation
-      //   console.warn('Could not create notification:', notifError);
-      // }
-
-      // Always show success for invitation creation
       toast({
         title: "Invitation sent",
         description: `${email} has been invited to collaborate`,
@@ -158,99 +113,36 @@ export const useInvitationActions = () => {
         return null;
       }
 
-      console.log(`Accepting invitation ${invitationId}`);
+      console.log(`Accepting invitation ${invitationId} via RPC`);
 
-      // First, get the invitation details to make sure it's valid
-      const { data: invitation, error: fetchError } = await supabase
-        .from('script_invitations')
-        .select('id, script_id, invitee_email, role')
-        .eq('id', invitationId)
-        .single();
+      // Use the SECURITY DEFINER RPC function which bypasses RLS policy conflicts
+      // Cast as any to bypass stale generated type union — the function is registered in types.ts
+      const { data: rpcData, error: rpcError } = await (supabase as any)
+        .rpc('accept_script_invitation', { p_invitation_id: invitationId });
 
-      if (fetchError || !invitation) {
-        console.error('Error fetching invitation:', fetchError);
-        throw new Error('Invitation not found');
+      const result = rpcData as { success: boolean; error?: string; script_id?: string } | null;
+
+      if (rpcError) {
+        console.error('RPC error accepting invitation:', rpcError);
+        throw new Error(rpcError.message);
       }
 
-      if (invitation.invitee_email !== session.user.email) {
-        throw new Error('This invitation is not for you');
+      if (!result?.success) {
+        console.error('Invitation acceptance returned failure:', result?.error);
+        throw new Error(result?.error || 'Could not accept invitation');
       }
-
-      // Update the invitation status
-      const { error: updateError } = await supabase
-        .from('script_invitations')
-        .update({
-          status: 'accepted',
-          invitee_id: session.user.id
-        })
-        .eq('id', invitationId);
-
-      if (updateError) {
-        console.error('Error updating invitation:', updateError);
-        throw updateError;
-      }
-
-      // Add the user to script_collaborators with the role from invitation
-      const { error: collaboratorError } = await supabase
-        .from('script_collaborators')
-        .insert({
-          script_id: invitation.script_id,
-          user_id: session.user.id,
-          role: invitation.role || 'editor'
-        });
-
-      if (collaboratorError) {
-        console.error('Error adding collaborator:', collaboratorError);
-        throw collaboratorError;
-      }
-
-      // TODO: Uncomment after running database migration
-      // Create notification for inviter
-      // try {
-      //   const { data: inviterData } = await supabase
-      //     .from('script_invitations')
-      //     .select('inviter_id, script_id')
-      //     .eq('id', invitationId)
-      //     .single();
-
-      //   if (inviterData) {
-      //     const { data: script } = await supabase
-      //       .from('scripts')
-      //       .select('title')
-      //       .eq('id', inviterData.script_id)
-      //       .single();
-
-      //     const { data: profile } = await supabase
-      //       .from('profiles')
-      //       .select('username, email')
-      //       .eq('id', session.user.id)
-      //       .single();
-
-      //     await supabase
-      //       .from('notifications')
-      //       .insert({
-      //         user_id: inviterData.inviter_id,
-      //         title: 'Invitation Accepted',
-      //         message: `${profile?.username || profile?.email || 'A user'} accepted your invitation to collaborate on "${script?.title || 'your script'}"`,
-      //         type: 'collaboration',
-      //         action_url: `/script/${inviterData.script_id}`
-      //       });
-      //   }
-      // } catch (notifError) {
-      //   console.warn('Could not create notification:', notifError);
-      // }
 
       toast({
         title: "Invitation accepted",
         description: "You now have access to this script",
       });
 
-      return invitation.script_id;
-    } catch (error) {
+      return result.script_id ?? null;
+    } catch (error: any) {
       console.error('Error accepting invitation:', error);
       toast({
         title: "Failed to accept invitation",
-        description: "There was a problem accepting the invitation",
+        description: error?.message || "There was a problem accepting the invitation",
         variant: "destructive",
       });
       return null;
@@ -258,6 +150,7 @@ export const useInvitationActions = () => {
       setIsLoading(false);
     }
   };
+
 
   const rejectInvitation = async (invitationId: string): Promise<boolean> => {
     try {
@@ -275,7 +168,6 @@ export const useInvitationActions = () => {
 
       console.log(`Rejecting invitation ${invitationId}`);
 
-      // Update the invitation status
       const { error } = await supabase
         .from('script_invitations')
         .update({ status: 'rejected' })

@@ -77,7 +77,9 @@ export const generatePlotContent = async (request: PlotAIRequest): Promise<PlotA
       sceneDescription: request.sceneDescription || 'Script content generation',
       customSystemPrompt: request.customSystemPrompt,
       maxTokens: request.promptType === 'plot' ? 1500 : 1000,
-      temperature: 0.7
+      temperature: 0.7,
+      skipCreditDeduction: true,
+      creditCost: 0
     };
 
     const response = await generateAIContent(aiRequest);

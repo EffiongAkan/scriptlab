@@ -62,7 +62,7 @@ export default function Scripts() {
 
   const filteredScripts = scripts.filter(script => {
     const matchesSearch = script.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         script.description?.toLowerCase().includes(searchTerm.toLowerCase());
+      script.description?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesGenre = !selectedGenre || script.genre === selectedGenre;
     return matchesSearch && matchesGenre;
   });
@@ -152,7 +152,7 @@ export default function Scripts() {
               {searchTerm || selectedGenre ? "No scripts found" : "No scripts yet"}
             </h3>
             <p className="text-sm text-gray-500 max-w-sm mb-4">
-              {searchTerm || selectedGenre 
+              {searchTerm || selectedGenre
                 ? "Try adjusting your search criteria"
                 : "Create your first professional script to start writing"
               }
@@ -164,7 +164,7 @@ export default function Scripts() {
           </div>
         ) : (
           filteredScripts.map(script => (
-            <ScriptCard key={script.id} script={script} />
+            <ScriptCard key={script.id} script={script} onUpdate={fetchScripts} />
           ))
         )}
       </div>

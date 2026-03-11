@@ -68,11 +68,11 @@ export const SimpleScriptElement = ({
       case 'heading':
         return 'font-bold text-left uppercase tracking-wide font-screenplay mt-6 mb-2';
       case 'character':
-        return 'font-bold text-left uppercase tracking-wide ml-40 font-screenplay mt-4';
+        return 'font-bold text-left uppercase tracking-wide ml-8 sm:ml-20 md:ml-40 font-screenplay mt-4';
       case 'dialogue':
-        return 'text-left ml-25 mr-20 max-w-[35rem] font-screenplay font-normal mb-2';
+        return 'text-left ml-4 sm:ml-12 md:ml-24 mr-4 sm:mr-10 md:mr-20 max-w-[35rem] font-screenplay font-normal mb-2';
       case 'parenthetical':
-        return 'italic text-left ml-30 mr-30 max-w-[25rem] font-screenplay mb-1';
+        return 'italic text-left ml-6 sm:ml-16 md:ml-32 mr-6 sm:mr-16 md:mr-32 max-w-[25rem] font-screenplay mb-1';
       case 'action':
         return 'text-left font-screenplay mb-4 leading-relaxed';
       case 'transition':

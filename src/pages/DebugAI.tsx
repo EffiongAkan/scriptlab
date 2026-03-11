@@ -85,13 +85,8 @@ const DebugAI = () => {
                             <span className="font-medium">Active Model:</span>
                             <Badge variant="outline">{mask(getSetting('active_ai_model'))}</Badge>
                         </div>
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <span className="font-medium">Anthropic Key:</span>
-                            <span className="text-sm font-mono">{mask(getSetting('anthropic_api_key'))}</span>
-                        </div>
-                        <div className="flex justify-between items-center border-b pb-2">
-                            <span className="font-medium">OpenAI Key:</span>
-                            <span className="text-sm font-mono">{mask(getSetting('openai_api_key'))}</span>
+                        <div className="mt-4 p-3 bg-muted rounded-md border text-sm text-center">
+                            API keys are encrypted and managed securely via Edge Functions. You can update them in the main AI Configuration settings.
                         </div>
                     </CardContent>
                 </Card>
@@ -123,8 +118,7 @@ const DebugAI = () => {
                 <ShieldCheck className="h-4 w-4" />
                 <AlertTitle>How to troubleshoot</AlertTitle>
                 <AlertDescription className="text-sm">
-                    If <strong>Anthropic Key</strong> starts with something other than <code>sk-ant-</code>, or has unexpected length (~108),
-                    it may be malformed. If <strong>Active Provider</strong> is not "anthropic", generation will try DeepSeek instead.
+                    If AI features are failing, verify your API keys are set correctly in the main Admin Settings. If <strong>Active Provider</strong> is not matching the key you provided, generation may fail.
                 </AlertDescription>
             </Alert>
         </div>

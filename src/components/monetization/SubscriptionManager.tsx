@@ -81,19 +81,23 @@ export const SubscriptionManager: React.FC = () => {
     if (!upgradeTarget) return;
     setIsUpgrading(true);
     try {
-      const success = await upgradeSubscription(upgradeTarget);
-      if (success) {
-        toast({ title: '✅ Subscription Updated', description: `You are now on the ${upgradeTarget} plan.` });
+      const result = await upgradeSubscription(upgradeTarget, selectedInterval);
+      if (result.success) {
+        // User is being redirected to Paystack — no toast needed here.
         setUpgradeTarget(null);
       } else {
-        toast({ title: 'Error', description: 'Could not update subscription.', variant: 'destructive' });
+        toast({
+          title: 'Checkout Failed',
+          description: result.error || 'Could not initiate secure checkout.',
+          variant: 'destructive',
+        });
       }
     } finally {
       setIsUpgrading(false);
     }
   };
 
-  const currentLimits = plans.find((p) => p.id === currentPlan)?.limits ?? plans[0].limits;
+  const currentLimits = plans.find((p) => p.id === currentPlan)?.limits ?? plans[0]?.limits ?? { scripts: 0, aiCreditsPerMonth: 0, collaborators: 0, exports: 0 };
 
   return (
     <div className="space-y-6">
@@ -216,13 +220,13 @@ export const SubscriptionManager: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Upgrade to {upgradeTarget} Plan</DialogTitle>
             <DialogDescription>
-              Contact your system administrator to process payment, or this will be activated immediately for demo purposes.
+              You will be redirected to our secure payment partner, Paystack, to complete your subscription checkout. All plans are billed in USD.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="outline" onClick={() => setUpgradeTarget(null)}>Cancel</Button>
             <Button onClick={handleUpgradeRequest} disabled={isUpgrading}>
-              {isUpgrading ? 'Activating...' : 'Confirm Upgrade'}
+              {isUpgrading ? 'Redirecting to checkout...' : 'Proceed to Checkout'}
             </Button>
           </DialogFooter>
         </DialogContent>

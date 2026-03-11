@@ -115,12 +115,14 @@ export const useNotifications = () => {
     useEffect(() => {
         fetchNotifications();
 
-        const { data: { user } } = supabase.auth.getUser().then(({ data }) => {
+        let channel: ReturnType<typeof supabase.channel> | null = null;
+
+        supabase.auth.getUser().then(({ data }) => {
             if (!data.user) return;
 
-            // Subscribe to new notifications
-            const channel = supabase
-                .channel('notifications')
+            // Subscribe to new notifications for this user
+            channel = supabase
+                .channel(`notifications_${data.user.id}`)
                 .on(
                     'postgres_changes',
                     {
@@ -136,11 +138,11 @@ export const useNotifications = () => {
                     }
                 )
                 .subscribe();
-
-            return () => {
-                channel.unsubscribe();
-            };
         });
+
+        return () => {
+            if (channel) channel.unsubscribe();
+        };
     }, []);
 
     return {

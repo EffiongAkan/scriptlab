@@ -25,6 +25,11 @@ import DebugAI from "@/pages/DebugAI";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+import FeaturesPage from "@/pages/FeaturesPage";
+import HowItWorksPage from "@/pages/HowItWorksPage";
+import IndustriesPage from "@/pages/IndustriesPage";
+import PricingPage from "@/pages/PricingPage";
+
 const queryClient = new QueryClient();
 
 const App = () => (
@@ -35,6 +40,10 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
+          <Route path="/features" element={<FeaturesPage />} />
+          <Route path="/how-it-works" element={<HowItWorksPage />} />
+          <Route path="/industries" element={<IndustriesPage />} />
+          <Route path="/pricing" element={<PricingPage />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"

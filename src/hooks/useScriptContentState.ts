@@ -275,13 +275,21 @@ export const useScriptContentState = (
   };
 
   const changeElementType = async (id: string, newType: ScriptElementType['type']) => {
-    // Optimistic update
+    // Optimistic update on local state
     const updatedElement = changeLocalElementType(id, newType);
 
     if (updatedElement) {
+      // Immediately push the type change to history so it is not overwritten by
+      // the debounced effect (which fires 1.5s later and could use stale state).
+      const currentElements = (useLocalElements ? localElements : realtimeElements) || [];
+      const updatedElements = currentElements.map(el =>
+        el.id === id ? { ...el, type: newType } : el
+      );
+      pushState(updatedElements);
+
       await syncElementToSupabase({
         id: updatedElement.id,
-        type: newType, // Explicitly send new type
+        type: newType,
         content: updatedElement.content
       });
       if (onContentChange) onContentChange();

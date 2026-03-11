@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { GitBranch, Plus, GitMerge, Trash2, Users, Clock } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { ScriptVersion } from '@/hooks/useVersionControl';
 
 interface Branch {
   name: string;
@@ -25,6 +26,7 @@ interface Branch {
 
 interface BranchManagerProps {
   scriptId: string;
+  versions: ScriptVersion[];
   activeBranch: string;
   onBranchChange: (branch: string) => void;
   onCreateBranch: (branchName: string) => void;
@@ -33,6 +35,7 @@ interface BranchManagerProps {
 
 export const BranchManager: React.FC<BranchManagerProps> = ({
   scriptId,
+  versions,
   activeBranch,
   onBranchChange,
   onCreateBranch,
@@ -43,59 +46,68 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
 
   useEffect(() => {
-    // Mock branch data
-    const mockBranches: Branch[] = [
-      {
+    if (!versions || versions.length === 0) {
+      setBranches([{
         name: 'main',
-        author: { id: '1', name: 'Sarah Chen', avatar: '/placeholder.svg' },
-        lastCommit: new Date(Date.now() - 1000 * 60 * 30),
+        author: { id: 'system', name: 'System' },
+        lastCommit: new Date(),
         commitsAhead: 0,
         commitsBehind: 0,
         isActive: activeBranch === 'main',
         isProtected: true
-      },
-      {
-        name: 'feature/character-development',
-        author: { id: '2', name: 'Mike Johnson' },
-        lastCommit: new Date(Date.now() - 1000 * 60 * 60 * 2),
-        commitsAhead: 3,
-        commitsBehind: 1,
-        isActive: activeBranch === 'feature/character-development'
-      },
-      {
-        name: 'feature/opening-scene',
-        author: { id: '3', name: 'Emma Wilson', avatar: '/placeholder.svg' },
-        lastCommit: new Date(Date.now() - 1000 * 60 * 60 * 6),
-        commitsAhead: 5,
-        commitsBehind: 2,
-        isActive: activeBranch === 'feature/opening-scene'
-      }
-    ];
+      }]);
+      return;
+    }
 
-    setBranches(mockBranches.map(branch => ({
-      ...branch,
-      isActive: branch.name === activeBranch
-    })));
-  }, [scriptId, activeBranch]);
+    const branchMap = new Map<string, Branch>();
+
+    versions.forEach(v => {
+      const branchName = v.branch || 'main';
+      if (!branchMap.has(branchName)) {
+        branchMap.set(branchName, {
+          name: branchName,
+          author: {
+            id: v.created_by,
+            name: v.author?.name || 'Unknown User',
+            avatar: ''
+          },
+          lastCommit: new Date(v.created_at),
+          commitsAhead: 0,
+          commitsBehind: 0,
+          isActive: branchName === activeBranch,
+          isProtected: branchName === 'main'
+        });
+      }
+    });
+
+    // Ensure activeBranch exists in the list even if no commits yet (fallback)
+    if (!branchMap.has(activeBranch)) {
+      branchMap.set(activeBranch, {
+        name: activeBranch,
+        author: { id: 'current', name: 'You' },
+        lastCommit: new Date(),
+        commitsAhead: 0,
+        commitsBehind: 0,
+        isActive: true,
+        isProtected: activeBranch === 'main'
+      });
+    }
+
+    // Convert map to array and update active status
+    const branchList = Array.from(branchMap.values()).map(b => ({
+      ...b,
+      isActive: b.name === activeBranch
+    }));
+
+    setBranches(branchList);
+  }, [versions, activeBranch]);
 
   const handleCreateBranch = () => {
     if (!newBranchName.trim()) return;
-    
+
     onCreateBranch(newBranchName);
     setNewBranchName('');
     setIsCreateDialogOpen(false);
-    
-    // Add new branch to local state
-    const newBranch: Branch = {
-      name: newBranchName,
-      author: { id: 'current', name: 'You' },
-      lastCommit: new Date(),
-      commitsAhead: 0,
-      commitsBehind: 0,
-      isActive: false
-    };
-    
-    setBranches(prev => [...prev, newBranch]);
   };
 
   const handleSwitchBranch = (branchName: string) => {
@@ -114,7 +126,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
             <GitBranch className="h-5 w-5" />
             Branch Management
           </div>
-          
+
           <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogTrigger asChild>
               <Button size="sm">
@@ -154,9 +166,8 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
           {branches.map((branch) => (
             <div
               key={branch.name}
-              className={`p-4 border rounded-lg ${
-                branch.isActive ? 'border-primary bg-primary/5' : 'border-border'
-              }`}
+              className={`p-4 border rounded-lg ${branch.isActive ? 'border-primary bg-primary/5' : 'border-border'
+                }`}
             >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -166,7 +177,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                       {branch.author.name.charAt(0)}
                     </AvatarFallback>
                   </Avatar>
-                  
+
                   <div>
                     <div className="flex items-center gap-2">
                       <span className="font-medium">{branch.name}</span>
@@ -177,7 +188,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                         <Badge variant="secondary" className="text-xs">Protected</Badge>
                       )}
                     </div>
-                    
+
                     <div className="flex items-center gap-4 text-xs text-muted-foreground mt-1">
                       <div className="flex items-center gap-1">
                         <Users className="h-3 w-3" />
@@ -190,7 +201,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                     </div>
                   </div>
                 </div>
-                
+
                 <div className="flex items-center gap-2">
                   {(branch.commitsAhead > 0 || branch.commitsBehind > 0) && (
                     <div className="flex items-center gap-1 text-xs">
@@ -206,7 +217,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                       )}
                     </div>
                   )}
-                  
+
                   <div className="flex gap-1">
                     {!branch.isActive && (
                       <Button
@@ -217,7 +228,7 @@ export const BranchManager: React.FC<BranchManagerProps> = ({
                         Switch
                       </Button>
                     )}
-                    
+
                     {branch.name !== 'main' && branch.commitsAhead > 0 && (
                       <Button
                         variant="outline"

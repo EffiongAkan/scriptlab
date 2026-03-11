@@ -162,7 +162,7 @@ export const ContextualSuggestionsMenu: React.FC<ContextualSuggestionsMenuProps>
   return (
     <div
       ref={menuRef}
-      className="fixed z-50 w-80 max-h-96"
+      className="fixed z-50 w-[calc(100vw-2rem)] max-w-xs sm:w-80 max-h-96"
       style={{
         left: `${position.x}px`,
         top: `${position.y}px`,

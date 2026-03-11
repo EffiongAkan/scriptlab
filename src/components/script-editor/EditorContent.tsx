@@ -236,12 +236,7 @@ export function EditorContent() {
             setTitle(newTitle);
             setHasUnsavedChanges(true); // Mark as unsaved so user knows to save
           }}
-        />
-        <Button
-          variant="outline"
-          size="sm"
-          className="ml-auto text-orange-600 border-orange-200 hover:bg-orange-50"
-          onClick={async () => {
+          onRepairOrder={async () => {
             try {
               toast({ title: "Repairing...", description: "Re-indexing script elements..." });
               const { error } = await supabase.rpc('repair_script_order_smart' as any, { p_script_id: scriptId });
@@ -252,10 +247,7 @@ export function EditorContent() {
               toast({ title: "Error", description: e.message, variant: "destructive" });
             }
           }}
-        >
-          <Sparkles className="w-4 h-4 mr-2" />
-          Repair Order
-        </Button>
+        />
       </div>
 
 
@@ -344,10 +336,26 @@ export function EditorContent() {
                     console.log(`Modifying specific element: ${aiInitialSelection.elementId}`);
                     // Find index of element to replace
                     const targetIndex = currentElements.findIndex(e => e.id === aiInitialSelection.elementId);
+                    const targetElement = currentElements[targetIndex];
 
                     if (targetIndex !== -1) {
-                      console.log(`Found target at index ${targetIndex}, performing in-place replacement`);
-                      // Valid replacement found
+                      let elementsToRemove = 1;
+
+                      // If the selected element is a heading, we replace the ENTIRE SCENE
+                      if (targetElement.type === 'heading') {
+                        console.log(`Heading selected (${targetElement.content}). Finding scene boundaries for replacement.`);
+                        // Find the index of the next heading or end of script
+                        let nextHeadingIndex = currentElements.findIndex((e, i) => i > targetIndex && e.type === 'heading');
+                        if (nextHeadingIndex !== -1) {
+                          elementsToRemove = nextHeadingIndex - targetIndex;
+                        } else {
+                          // It's the last scene
+                          elementsToRemove = currentElements.length - targetIndex;
+                        }
+                        console.log(`Replacing scene: removing ${elementsToRemove} elements starting at index ${targetIndex}`);
+                      } else {
+                        console.log(`In-place replacement for single ${targetElement.type} element`);
+                      }
 
                       // Ensure parsed elements have correct new position relative to insertion
                       const positionedParsedElements = parsedElements.map((el, i) => ({
@@ -355,8 +363,8 @@ export function EditorContent() {
                         position: targetIndex + i
                       }));
 
-                      // Replace at index (remove 1, insert N)
-                      updatedElements.splice(targetIndex, 1, ...positionedParsedElements);
+                      // Replace at index (remove N, insert M)
+                      updatedElements.splice(targetIndex, elementsToRemove, ...positionedParsedElements);
                       appliedCount = parsedElements.length;
                     } else {
                       console.warn(`Target element ${aiInitialSelection.elementId} not found, falling back to smart merge`);

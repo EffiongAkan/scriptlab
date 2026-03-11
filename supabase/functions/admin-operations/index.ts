@@ -362,8 +362,7 @@ serve(async (req) => {
 
       case 'update_system_setting':
         try {
-          // 1. Basic Admin Check (Required for all settings)
-          /*
+          // 1. Basic Admin Check
           const { data: adminCheck, error: adminCheckError } = await supabaseClient
             .from('admin_users')
             .select('*')
@@ -372,15 +371,11 @@ serve(async (req) => {
             .maybeSingle()
 
           if (adminCheckError || !adminCheck) {
-            console.error('Regular admin verification failed:', adminCheckError);
-            console.log('Admin check failed but proceeding for debug...');
-            // return new Response(JSON.stringify({ error: 'Admin access required' }), {
-            //   status: 403,
-            //   headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-            // })
+            return new Response(JSON.stringify({ error: 'Admin access required' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
           }
-          */
-          console.log('Bypassing all admin checks for settings update...');
 
           // 2. Sensitive Keys Super Admin Check
           const sensitiveKeys = [
@@ -394,23 +389,25 @@ serve(async (req) => {
           const { key, value, description } = data;
 
           if (sensitiveKeys.includes(key)) {
-            console.log(`[Super Admin Check] Bypassing check for dev environment. Key: ${key}, user: ${user.id}`);
-            // Check disabled to fix "Configuration Error" for owner
-            /*
-            if (!isSuper) {
-               // ... logic removed ...
+            const { data: isSuper, error: superCheckError } = await (supabaseClient.rpc as any)('is_super_admin', {
+              user_id: user.id
+            });
+
+            if (superCheckError || !isSuper) {
+              return new Response(JSON.stringify({ error: 'Super Admin access required for sensitive keys' }), {
+                status: 403,
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              })
             }
-            */
           }
 
-          // 3. Perform the update
+          // 3. Perform the update (Edge Function bypasses RLS so it can write the API keys)
           const { error: settingError } = await supabaseClient
             .from('system_settings')
             .upsert({
               key,
-              value: JSON.stringify(value),
+              value: typeof value === 'string' ? value : JSON.stringify(value),
               description: description || null
-              // updated_by: user.id // Removed to prevent FK issues
             })
 
           if (settingError) throw settingError
@@ -421,6 +418,93 @@ serve(async (req) => {
         } catch (error: any) {
           console.error('Error updating system setting:', error)
           return new Response(JSON.stringify({ error: 'Failed to update system setting', message: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+      case 'get_api_key_status':
+        try {
+          // 1. Basic Admin Check
+          const { data: adminCheck, error: adminCheckError } = await supabaseClient
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (adminCheckError || !adminCheck) {
+            return new Response(JSON.stringify({ error: 'Admin access required' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          // 2. Fetch the keys using the service role (which bypasses the restricted RLS)
+          const apiKeysToFetch = [
+            'openai_api_key',
+            'anthropic_api_key',
+            'xai_api_key',
+            'deepseek_api_key'
+          ];
+
+          const { data: settingsData, error: fetchError } = await supabaseClient
+            .from('system_settings')
+            .select('key, value')
+            .in('key', apiKeysToFetch);
+
+          if (fetchError) throw fetchError;
+
+          // 3. Transform into a map of booleans (has value or not) - NEVER RETURN THE ACTUAL KEY
+          const stausMap: Record<string, boolean> = {};
+
+          // Initialize all to false
+          apiKeysToFetch.forEach(k => { stausMap[k] = false; });
+
+          // Update true if value exists and length > 5
+          settingsData?.forEach(setting => {
+            // Check if the value is a string with length > 5 (JSON empty strings are '""' which is length 2)
+            stausMap[setting.key] = typeof setting.value === 'string' && setting.value.length > 5;
+          });
+
+          return new Response(JSON.stringify({ success: true, statuses: stausMap }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error fetching API key status:', error)
+          return new Response(JSON.stringify({ error: 'Failed to check API keys', message: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+      case 'emergency_cleanup':
+        try {
+          // ONLY authorized super admins can run this
+          const authorizedEmails = ['uploadakan@gmail.com', 'pelicanink2025@gmail.com'];
+          if (!authorizedEmails.includes(user.email || '')) {
+            return new Response(JSON.stringify({ error: 'Access denied. Emergency cleanup restricted.' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          console.log('EMERGENCY CLEANUP: Removing unauthorized admins...');
+
+          // Delete anyone who isn't a hardcoded super admin
+          const { error: deleteError, count } = await supabaseClient
+            .from('admin_users')
+            .delete({ count: 'exact' })
+            .not('email', 'in', `(${authorizedEmails.join(',')})`);
+
+          if (deleteError) throw deleteError;
+
+          return new Response(JSON.stringify({ success: true, removedCount: count }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error during emergency cleanup:', error)
+          return new Response(JSON.stringify({ error: 'Cleanup failed', message: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
@@ -638,6 +722,39 @@ serve(async (req) => {
         } catch (error) {
           console.error('Error creating subscription plan:', error)
           return new Response(JSON.stringify({ error: 'Failed to create subscription plan' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+      case 'update_admin_status':
+        try {
+          // Check if sender is super admin
+          const { data: isSuper, error: superCheckError } = await (supabaseClient.rpc as any)('is_super_admin', {
+            user_id: user.id
+          });
+
+          if (superCheckError || !isSuper) {
+            return new Response(JSON.stringify({ error: 'Super Admin access required for this operation' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const { adminId, isActive } = data;
+          const { error: updateError } = await supabaseClient
+            .from('admin_users')
+            .update({ is_active: isActive })
+            .eq('id', adminId);
+
+          if (updateError) throw updateError;
+
+          return new Response(JSON.stringify({ success: true }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error updating admin status:', error)
+          return new Response(JSON.stringify({ error: 'Failed to update admin status', message: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })

@@ -60,6 +60,7 @@ export const ScriptContentContainer = ({
   const [zoom, setZoom] = useState<string>("100%");
   const [isOutlineOpen, setIsOutlineOpen] = useState<boolean>(true);
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
+  const [focusedElementId, setFocusedElementId] = useState<string | null>(null);
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState<number>(0);
 
@@ -208,11 +209,15 @@ export const ScriptContentContainer = ({
   };
 
   const handleElementFocusInternal = (elementId: string) => {
-    handleFocus(elementId);
+    setFocusedElementId(elementId);
     if (onElementFocus) {
       onElementFocus(elementId);
     }
   };
+
+  // Derive the type of the currently focused element for the mobile toolbar
+  const focusedElement = scriptElements.find(el => el.id === focusedElementId);
+  const activeElementType = focusedElement?.type ?? null;
 
   const scrollToElementId = useCallback((elementId: string) => {
     // Find the element index in the full scriptElements array
@@ -429,20 +434,26 @@ export const ScriptContentContainer = ({
             style={{ overscrollBehaviorY: 'contain' }}
           >
             {/* Format Toolbar Integrated into Writing Area */}
-            <div className="w-full sticky top-0 z-10">
+            <div className="w-full z-[60] fixed bottom-0 left-0 md:relative md:sticky md:top-0">
               <ScriptFormatToolbar
                 zoom={zoom}
                 onZoomChange={setZoom}
                 onInsertElement={insertScriptElement}
                 onToggleSceneNav={toggleOutline}
                 isSceneNavOpen={isOutlineOpen}
+                activeElementType={activeElementType}
+                onChangeElementType={(newType) => {
+                  if (focusedElementId) {
+                    changeElementType(focusedElementId, newType);
+                  }
+                }}
               />
             </div>
 
-            <div className="py-4 md:py-10 px-0 md:px-4 flex flex-col items-center w-full">
-              <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl">
+            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-16 md:pb-10">
+              <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl mb-12 md:mb-0">
                 {/* "Saving..." Indicator positioned top right of paper */}
-                <div className="absolute top-2 right-2 md:-top-10 md:right-0 flex items-center gap-2 text-[10px] font-medium text-gray-400 md:text-gray-500 bg-black/20 md:bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5 z-10">
+                <div className="hidden md:flex absolute -top-10 right-0 items-center gap-2 font-medium text-gray-500 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5 z-10">
                   <AutoSaveIndicator
                     isSaving={isSaving}
                     lastSavedAt={lastSavedAt}
@@ -451,18 +462,27 @@ export const ScriptContentContainer = ({
                 </div>
 
                 {/* Title Header above paper */}
-                <div className="w-full bg-[#1E1E1E] border-b md:border border-gray-800 rounded-none md:rounded-t-lg p-3 md:p-4 flex items-center justify-center">
-                  <span className="text-gray-400 font-bold tracking-widest uppercase text-xs md:text-sm truncate max-w-[200px]">{title || "THE KICK"}</span>
+                <div className="w-full bg-[#1E1E1E] border md:border-b-0 border-gray-800 rounded-t-lg p-3 md:p-4 flex items-center justify-center">
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={onTitleChange}
+                    className="md:hidden w-full text-center bg-transparent border-none text-gray-200 font-bold text-lg focus:ring-0 focus:outline-none"
+                    placeholder="Untitled Script"
+                  />
+                  <span className="hidden md:block text-gray-400 font-bold tracking-widest uppercase text-sm truncate max-w-[200px]">{title || "THE KICK"}</span>
                 </div>
 
                 <ScriptPaper
                   ref={paperRef}
                   data-script-paper
-                  className="relative bg-white text-black min-h-[50vh] md:min-h-[297mm] p-4 md:p-[1.5in] shadow-sm rounded-none md:rounded-t-none"
+                  className="relative bg-white text-black min-h-[50vh] md:min-h-[297mm] p-1 px-4 md:p-[1.5in] shadow-sm rounded-none md:rounded-t-none"
                   style={{ zoom: isMobileView ? '100%' : zoom }}
                   aria-label="Script paper"
                 >
-                  <ScriptTitle>{sanitizeScriptContent(title)}</ScriptTitle>
+                  <div className="hidden md:block">
+                    <ScriptTitle>{sanitizeScriptContent(title)}</ScriptTitle>
+                  </div>
                   {scriptElements.length > 0 ? (
                     <>
                       <ScriptElementList

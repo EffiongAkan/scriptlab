@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Link as LinkIcon, CheckCircle, Video, Sparkles } from "lucide-react";
 import { VideoAnalysis } from "@/types";
 import { supabase } from "@/integrations/supabase/client";
-
+import { deductAICredits } from "@/hooks/useAICredits";
 interface VideoAnalysisDialogProps {
     onBack: () => void;
     onProceed: (analysis: VideoAnalysis) => void;
@@ -59,6 +59,17 @@ export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack
         console.log("[VideoAnalysis] Starting analysis for:", trimmedUrl, forceRefresh ? "(Forced)" : "");
 
         try {
+            const creditResult = await deductAICredits(5, 'video_analysis', `Analyzed video URL: ${trimmedUrl}`);
+            if (!creditResult.success) {
+                toast({
+                    title: "Insufficient AI Credits",
+                    description: creditResult.message || "You need 5 credits to analyze a video.",
+                    variant: "destructive"
+                });
+                setIsAnalyzing(false);
+                return;
+            }
+
             console.log("[VideoAnalysis] Invoking edge function 'analyze-video'...");
             const { data, error } = await supabase.functions.invoke('analyze-video', {
                 body: { videoUrl: trimmedUrl, forceRefresh }

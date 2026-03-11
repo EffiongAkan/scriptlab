@@ -3,7 +3,7 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Home, FileText, Users, BookOpen, BarChart, Settings, Briefcase, Crown, GitBranch, Factory, Save, Layout, Menu } from "lucide-react";
+import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu } from "lucide-react";
 import { useScriptSave } from "@/hooks/useScriptSave";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
@@ -14,10 +14,8 @@ const menuItems = [
   { title: "Dashboard", path: "/dashboard", icon: Layout },
   { title: "Plot Generation", path: "/plot-generator", icon: BookOpen },
   { title: "Settings", path: "/settings", icon: Settings },
-  { title: "Business Tools", path: "/business-tools", icon: Briefcase },
   { title: "Premium", path: "/premium", icon: Crown },
   { title: "Version Control", path: "/version-control", icon: GitBranch },
-  { title: "Industry Integration", path: "/industry-integration", icon: Factory },
 ];
 
 export const AppTopbar: React.FC = () => {

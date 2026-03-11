@@ -1,5 +1,5 @@
-
 import { supabase } from "@/integrations/supabase/client";
+import { deductAICredits } from "@/hooks/useAICredits";
 
 // Types for AI requests and responses
 export interface AIRequest {
@@ -7,7 +7,7 @@ export interface AIRequest {
   context?: string;
   maxTokens?: number;
   temperature?: number;
-  feature: 'dialogue' | 'scene' | 'cultural' | 'revision' | 'plot' | 'character';
+  feature: 'dialogue' | 'scene' | 'cultural' | 'revision' | 'plot' | 'character' | 'development';
   genre?: string;
   language?: string;
   region?: string;
@@ -27,6 +27,8 @@ export interface AIRequest {
   customSystemPrompt?: string;
   promptOverride?: string;
   isAnalysis?: boolean;
+  skipCreditDeduction?: boolean;
+  creditCost?: number;
 }
 
 export interface AIResponse {
@@ -44,6 +46,22 @@ export interface AIResponse {
 export const generateAIContent = async (request: AIRequest): Promise<AIResponse> => {
   try {
     console.log(`Requesting AI content for ${request.feature}`, request);
+
+    if (!request.skipCreditDeduction) {
+      // Default to 3 for analysis, 1 for small requests, or use explicit cost
+      const defaultCost = request.isAnalysis ? 3 : 1;
+      const cost = request.creditCost || defaultCost;
+
+      const creditResult = await deductAICredits(cost, request.feature, `AI Action: ${request.feature}`);
+      if (!creditResult.success) {
+        return {
+          content: '',
+          success: false,
+          error: creditResult.message || `Insufficient AI credits. You need ${cost} credits.`,
+          errorType: 'credits'
+        };
+      }
+    }
 
     // Determine which edge function to use based on the request
     // Use generate-script-content for all content generation

@@ -204,10 +204,14 @@ export const useLocalElementState = (
   }, [localElements, markElementDirty]);
 
   // Update element type locally
+  // BUGFIX: Use localElementsRef.current (always up to date) instead of the
+  // potentially-stale localElements closure, which goes stale after undo/redo
+  // calls setAllElements and replaces the array between renders.
   const changeLocalElementType = useCallback((id: string, type: ScriptElementType['type']) => {
-    const elementToUpdate = localElements.find(el => el.id === id);
+    const currentElements = localElementsRef.current;
+    const elementToUpdate = currentElements.find(el => el.id === id);
     if (!elementToUpdate) {
-      console.warn(`Element with id ${id} not found in local elements`);
+      console.warn(`Element with id ${id} not found in local elements (ref). Length: ${currentElements.length}`);
       return null;
     }
 
@@ -215,6 +219,7 @@ export const useLocalElementState = (
     markElementDirty(id);
 
     setLocalElements(prev => {
+      // Search in prev (functional update) for safety
       const updated = prev.map(el =>
         el.id === id ? { ...el, type } : el
       );
@@ -229,7 +234,7 @@ export const useLocalElementState = (
       ...elementToUpdate,
       type
     };
-  }, [localElements, markElementDirty]);
+  }, [markElementDirty]); // Removed localElements dep - use ref instead
 
   // Delete element from local state
   const deleteLocalElement = useCallback((id: string) => {

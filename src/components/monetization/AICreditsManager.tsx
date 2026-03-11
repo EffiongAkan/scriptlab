@@ -43,28 +43,26 @@ export const AICreditsManager: React.FC = () => {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  // For demo: directly add credits on top-up request confirmation
   const handleConfirmPurchase = async (pkg: CreditPackage) => {
     setIsProcessing(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Not authenticated');
 
-      const totalCredits = pkg.credits + (pkg.bonus ?? 0);
-      const success = await addAICredits(user.id, totalCredits, 'purchase', `${pkg.name} - ${totalCredits} credits`);
+      const { data, error } = await supabase.functions.invoke('create-credit-checkout', {
+        body: { packageId: pkg.id, credits: pkg.credits, bonus: pkg.bonus }
+      });
 
-      if (success) {
-        toast({ title: '✅ Credits Added!', description: `${totalCredits} AI credits added to your account.` });
-        queryClient.invalidateQueries({ queryKey: ['ai_credits'] });
-        queryClient.invalidateQueries({ queryKey: ['credit_history'] });
-        setRequestPkg(null);
+      if (error) throw error;
+
+      if (data?.url) {
+        window.location.href = data.url;
       } else {
-        toast({ title: 'Error', description: 'Failed to add credits.', variant: 'destructive' });
+        throw new Error('Failed to generate Paystack checkout link.');
       }
     } catch (err: any) {
       toast({ title: 'Error', description: err.message, variant: 'destructive' });
-    } finally {
-      setIsProcessing(false);
+      setIsProcessing(false); // Only reset if there's an error, otherwise we are redirecting
     }
   };
 
@@ -148,7 +146,10 @@ export const AICreditsManager: React.FC = () => {
                     {pkg.credits}
                     {pkg.bonus && <span className="text-sm text-green-600"> +{pkg.bonus}</span>}
                   </div>
-                  <div className="text-xs text-muted-foreground">credits</div>
+                  <div className="text-xs text-muted-foreground mb-2">credits</div>
+                  <Badge variant="outline" className="text-xs font-normal">
+                    ${(pkg.credits * 0.10).toFixed(2)}
+                  </Badge>
                 </CardHeader>
                 <CardContent className="pt-0 p-4">
                   <Button
@@ -225,8 +226,9 @@ export const AICreditsManager: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Confirm Credit Purchase</DialogTitle>
             <DialogDescription>
-              You are requesting <strong>{requestPkg ? requestPkg.credits + (requestPkg.bonus ?? 0) : 0} AI credits</strong>.
-              {' '}For demo purposes, credits will be added instantly.
+              You are requesting <strong>{requestPkg ? requestPkg.credits + (requestPkg.bonus ?? 0) : 0} AI credits</strong>
+              {' '}for <strong>${requestPkg ? (requestPkg.credits * 0.10).toFixed(2) : '0.00'}</strong>.
+              You will be redirected to Paystack to complete your purchase securely.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
