@@ -122,24 +122,10 @@ export const ScriptElementList = ({
   // Optimized element tracking for new additions
   useEffect(() => {
     if (scriptElements.length > previousElementsLengthRef.current && scriptElements.length > 0) {
+      // Find what was actually added if possible, or fallback to the last element for animation
+      // We rely on useScriptContentState for the actual focus logic
       const lastElement = scriptElements[scriptElements.length - 1];
       newElementRef.current = lastElement?.id || null;
-
-      // Auto-focus the new element with improved timing
-      const focusTimeout = setTimeout(() => {
-        const newElement = document.getElementById(`script-element-${newElementRef.current}`);
-        if (newElement) {
-          const textarea = newElement.querySelector('textarea');
-          if (textarea) {
-            textarea.focus();
-            // Scroll into view smoothly
-            newElement.scrollIntoView({
-              behavior: 'smooth',
-              block: 'center'
-            });
-          }
-        }
-      }, 150);
 
       // Reset animation flag
       const resetTimeout = setTimeout(() => {
@@ -147,7 +133,6 @@ export const ScriptElementList = ({
       }, 1000);
 
       return () => {
-        clearTimeout(focusTimeout);
         clearTimeout(resetTimeout);
       };
     }

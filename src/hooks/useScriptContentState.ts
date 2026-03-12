@@ -6,6 +6,7 @@ import { useLocalElementState } from "@/hooks/useLocalElementState";
 import { useScriptElementSync } from "@/hooks/useScriptElementSync";
 import { useCollaborativeCursor } from "@/hooks/useCollaborativeCursor";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 function findNearestScriptElementId(node: HTMLElement | null): string | null {
   // Traverse up DOM tree to find a parent with a data-element-id attribute
@@ -160,8 +161,49 @@ export const useScriptContentState = (
       // Construct the new state for history immediately
       pushState(updatedElements);
 
-      // Use atomic reorder to persist to DB
-      reorderElementsAtomic(elementIds);
+      // INSERT into database with a temporary safe position at the end of the array.
+      // We must insert BEFORE we call reorderElementsAtomic, otherwise it fails to update the missing ID.
+      supabase.from('script_elements').insert({
+        id: newElement.id,
+        script_id: newElement.script_id,
+        type: newElement.type,
+        content: newElement.content,
+        position: elementsArray.length // temporary safe position to avoid constraint violation
+      }).then(({ error }) => {
+        if (error) {
+          console.error("Error inserting new element:", error);
+          toast({
+            title: "Insert Failed",
+            description: "Failed to save the new element. Please try again.",
+            variant: "destructive"
+          });
+        }
+
+        // Use atomic reorder to persist their correct swapped positions to DB
+        reorderElementsAtomic(elementIds);
+      });
+
+      // Fix focus: Focus the exactly newly created element instead of guessing it's at the end
+      setTimeout(() => {
+        const newElNode = document.getElementById(`script-element-${newElement.id}`);
+        if (newElNode) {
+          newElNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const textarea = newElNode.querySelector('textarea, [contenteditable]');
+          if (textarea instanceof HTMLElement) {
+            textarea.focus();
+
+            // Move cursor to end if it's contenteditable
+            if (textarea.isContentEditable) {
+              const range = document.createRange();
+              const selection = window.getSelection();
+              range.selectNodeContents(textarea);
+              range.collapse(false);
+              selection?.removeAllRanges();
+              selection?.addRange(range);
+            }
+          }
+        }
+      }, 100);
 
       processedElementRef.current = currentElement.id;
       resetCurrentElement();
