@@ -97,6 +97,17 @@ export const useLocalElementState = (
 
       // Only update if there's a meaningful difference
       if (!elementsAreEqual(localElementsRef.current, initialElements)) {
+        const TIME_TO_IGNORE_REALTIME_AFTER_USER_EDIT = 3000;
+        const userIsIdle = Date.now() - lastUserEditRef.current >= TIME_TO_IGNORE_REALTIME_AFTER_USER_EDIT;
+
+        // PROTECTION: If user is active and we are in local override mode, do NOT overwrite local state with DB data.
+        // This prevents the "snap-back" jump because the DB interim state (after INSERT but before REORDER)
+        // is inconsistent with our optimistic local state.
+        if (!userIsIdle && useLocalElements) {
+          console.log("Maintaining local state priority: user is active, skipping sync with initialElements");
+          return;
+        }
+
         console.log("Setting initial elements with optimizations and sorting");
         const elementsWithValidation = initialElements
           .map(el => ({
@@ -108,7 +119,12 @@ export const useLocalElementState = (
         setLocalElements(elementsWithValidation);
         localElementsRef.current = elementsWithValidation;
         setLastSyncTimestamp(Date.now());
-        setUseLocalElements(false); // PRIORITY: Always trust database data over local/stale state
+
+        if (userIsIdle) {
+          setUseLocalElements(false);
+        } else {
+          console.log("Maintaining local mode despite update: user is still active");
+        }
       }
     } else if (initialElements && initialElements.length === 0) {
       console.log("Received empty initial elements array");

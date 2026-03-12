@@ -151,6 +151,7 @@ export const useScriptContentState = (
 
       // Insert locally first for immediate UI update
       const inserted = addLocalElement(newElement, insertIndex);
+      console.log(`[useScriptContentState] Inserting element at index ${insertIndex}. Total elements before: ${elementsArray.length}`);
 
       // Get the full list of IDs in order to call atomic reorder
       // This is the most robust way to ensure no duplicates are created
@@ -180,6 +181,8 @@ export const useScriptContentState = (
         }
 
         // Use atomic reorder to persist their correct swapped positions to DB
+        // Block realtime sync for a few extra seconds during this transaction
+        blockRealtimeSync(3000);
         reorderElementsAtomic(elementIds);
       });
 

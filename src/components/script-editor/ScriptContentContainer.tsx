@@ -60,7 +60,7 @@ export const ScriptContentContainer = ({
   const [zoom, setZoom] = useState<string>("100%");
   const [isOutlineOpen, setIsOutlineOpen] = useState<boolean>(true);
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
-  const [focusedElementId, setFocusedElementId] = useState<string | null>(null);
+  const { focusedElementId, setFocusedElementId, insertScriptElement } = useScriptEditor();
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState<number>(0);
 
@@ -81,7 +81,7 @@ export const ScriptContentContainer = ({
 
   const {
     localElements,
-    realtimeElements, // Destructure the internal realtime state
+    realtimeElements,
     useLocalElements,
     revision,
     handleContentChange,
@@ -92,7 +92,6 @@ export const ScriptContentContainer = ({
     handleElementClick,
     deleteSelectedElements
   } = useScriptContentState(scriptId, elementsToUse, onContentChange);
-  const { insertScriptElement } = useScriptEditor();
 
   // Handle delete key for batch deletion
   useEffect(() => {
