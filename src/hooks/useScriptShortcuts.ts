@@ -121,13 +121,19 @@ export function useScriptShortcuts() {
       // Tab for quick format switching (without modifier keys)
       if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
         const activeElement = document.activeElement as HTMLElement;
-        if (activeElement?.closest('[data-script-element]')) {
+        const activeContainer = activeElement?.closest('[data-element-id]');
+        if (activeContainer) {
           e.preventDefault();
-          // Cycle through common element types
-          const elementTypes = ['action', 'character', 'dialogue', 'parenthetical'];
-          const currentIndex = Math.floor(Math.random() * elementTypes.length);
-          const nextType = elementTypes[currentIndex] as any;
-          insertScriptElement(nextType);
+          const elementId = activeContainer.getAttribute('data-element-id');
+          const currentType = activeContainer.getAttribute('data-element-type');
+
+          if (elementId && currentType) {
+            // Dispatch a custom event to change the format of the current element
+            const formatEvent = new CustomEvent('script-format-change', {
+              detail: { id: elementId, currentType }
+            });
+            document.dispatchEvent(formatEvent);
+          }
         }
       }
     };

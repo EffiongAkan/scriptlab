@@ -15,6 +15,7 @@ interface EditorTabsProps {
   onContentChange?: () => void;
   onApplySuggestion?: (elementId: string, newContent: string) => void;
   onApplyAllSuggestions?: (suggestions: Array<{ elementId: string; content: string }>) => void;
+  onImplementAllSuggestions?: (updatedElements: any[]) => void;
   onTabChange?: (tab: string) => void;
   isSaving?: boolean;
   lastSavedAt?: Date | null;
@@ -33,6 +34,7 @@ export const EditorTabs = ({
   onContentChange,
   onApplySuggestion,
   onApplyAllSuggestions,
+  onImplementAllSuggestions,
   onTabChange,
   isSaving = false,
   lastSavedAt,
@@ -84,6 +86,7 @@ export const EditorTabs = ({
         <ScriptAnalysisTabContent
           elements={elements}
           onApplySuggestion={onApplySuggestion}
+          onImplementAllSuggestions={onImplementAllSuggestions}
           genre={genre}
           language={language}
           synopsis={synopsis}

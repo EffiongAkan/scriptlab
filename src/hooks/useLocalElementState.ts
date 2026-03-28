@@ -2,6 +2,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { ScriptElementType } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
 import { useScriptRealtime } from "@/hooks/useScriptRealtime";
+import { db } from "@/db/offline-db";
+import { useSyncStatus } from "@/contexts/SyncStatusContext";
 
 export const useLocalElementState = (
   scriptId: string,
@@ -21,6 +23,7 @@ export const useLocalElementState = (
   const dirtyTimeoutsRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
   const { toast } = useToast();
+  const { isOnline } = useSyncStatus();
 
   // Internalize Realtime Hook with Dirty Element Filtering
   // We pass the list of dirty IDs to the realtime hook so it can ignore updates for them
@@ -213,6 +216,25 @@ export const useLocalElementState = (
     // Mark as using local elements for conflict resolution
     setUseLocalElements(true);
 
+    // Save to Offline DB immediately
+    db.script_elements.put({
+      ...elementToUpdate,
+      content: sanitizedContent,
+      script_id: scriptId,
+      updated_at: new Date().toISOString(),
+      syncStatus: isOnline ? 'synced' : 'pending'
+    });
+
+    // If offline, add to sync queue
+    if (!isOnline) {
+      db.sync_queue.add({
+        table: 'script_elements',
+        action: 'upsert',
+        data: { ...elementToUpdate, content: sanitizedContent, script_id: scriptId, updated_at: new Date().toISOString() },
+        timestamp: Date.now()
+      });
+    }
+
     return {
       ...elementToUpdate,
       content: sanitizedContent
@@ -245,6 +267,24 @@ export const useLocalElementState = (
     });
 
     setUseLocalElements(true);
+
+    // Save to Offline DB
+    db.script_elements.put({
+      ...elementToUpdate,
+      type,
+      script_id: scriptId,
+      updated_at: new Date().toISOString(),
+      syncStatus: isOnline ? 'synced' : 'pending'
+    });
+
+    if (!isOnline) {
+      db.sync_queue.add({
+        table: 'script_elements',
+        action: 'upsert',
+        data: { ...elementToUpdate, type, script_id: scriptId, updated_at: new Date().toISOString() },
+        timestamp: Date.now()
+      });
+    }
 
     return {
       ...elementToUpdate,
@@ -280,8 +320,20 @@ export const useLocalElementState = (
     // Mark as using local elements
     setUseLocalElements(true);
 
+    // Remove from Offline DB
+    db.script_elements.delete(id);
+
+    if (!isOnline) {
+      db.sync_queue.add({
+        table: 'script_elements',
+        action: 'delete',
+        data: { id },
+        timestamp: Date.now()
+      });
+    }
+
     return true;
-  }, [localElements, markElementDirty]);
+  }, [localElements, markElementDirty, isOnline]);
 
   // Batch delete local elements
   const deleteLocalElements = useCallback((ids: string[]) => {
@@ -309,10 +361,24 @@ export const useLocalElementState = (
     // Mark as using local elements
     setUseLocalElements(true);
 
-    return true;
-  }, [markElementDirty]);
+    // Remove from Offline DB
+    db.script_elements.bulkDelete(ids);
 
-  // Insert element at specific index and reindex all positions, returning the actual inserted element with its correct position
+    if (!isOnline) {
+      ids.forEach(id => {
+        db.sync_queue.add({
+          table: 'script_elements',
+          action: 'delete',
+          data: { id },
+          timestamp: Date.now()
+        });
+      });
+    }
+
+    return true;
+  }, [markElementDirty, isOnline]);
+
+  // Insert element at specific index and reindex all positions
   const addLocalElement = useCallback((element: ScriptElementType, insertIndex: number = -1) => {
     const sanitizedElement = {
       ...element,
@@ -350,6 +416,26 @@ export const useLocalElementState = (
 
       localElementsRef.current = newElements;
       setLastSyncTimestamp(Date.now());
+
+      // Save to Offline DB
+      if (insertedElement) {
+        db.script_elements.put({
+          ...insertedElement,
+          script_id: scriptId,
+          updated_at: new Date().toISOString(),
+          syncStatus: isOnline ? 'synced' : 'pending'
+        });
+
+        if (!isOnline) {
+          db.sync_queue.add({
+            table: 'script_elements',
+            action: 'upsert',
+            data: { ...insertedElement, script_id: scriptId, updated_at: new Date().toISOString() },
+            timestamp: Date.now()
+          });
+        }
+      }
+
       return newElements;
     });
 
@@ -357,14 +443,14 @@ export const useLocalElementState = (
 
     // Return the element with real assigned position
     return insertedElement;
-  }, [markElementDirty]);
+  }, [markElementDirty, scriptId, isOnline]);
 
   const blockRealtimeSync = useCallback((duration: number = 2000) => {
     console.log(`Blocking realtime sync for ${duration}ms`);
     lastUserEditRef.current = Date.now() + duration; // Set into future to block for longer
   }, []);
 
-  // Enhanced backup system with compression
+  // Enhanced backup system with Dexie (IndexedDB)
   useEffect(() => {
     if (scriptId && localElements.length > 0) {
       // Clear existing backup interval
@@ -372,21 +458,28 @@ export const useLocalElementState = (
         clearInterval(backupIntervalRef.current);
       }
 
-      // Set up periodic backup (every 30 seconds)
-      backupIntervalRef.current = setInterval(() => {
+      // Set up periodic backup (every 60 seconds) - Dexie is faster but we still want it staggered
+      backupIntervalRef.current = setInterval(async () => {
         try {
-          const backupData = {
-            elements: localElements,
-            timestamp: Date.now(),
-            version: '2.0' // Backup format version
-          };
+          const timestamp = new Date().toISOString();
+          const offlineElements = localElements.map(el => ({
+            ...el,
+            script_id: scriptId,
+            updated_at: timestamp,
+            syncStatus: isOnline ? 'synced' : ('pending' as any)
+          }));
 
-          localStorage.setItem(`scriptBackup_${scriptId}`, JSON.stringify(backupData));
-          console.log(`Enhanced backup: ${localElements.length} elements`);
+          await db.transaction('rw', db.script_elements, async () => {
+            // Bulk update local storage
+            await db.script_elements.where('script_id').equals(scriptId).delete();
+            await db.script_elements.bulkAdd(offlineElements);
+          });
+          
+          console.log(`Dexie IndexedDB backup: ${localElements.length} elements`);
         } catch (e) {
-          console.error('Failed to create enhanced backup:', e);
+          console.error('Failed to create Dexie backup:', e);
         }
-      }, 30000);
+      }, 60000);
     }
 
     return () => {
@@ -394,45 +487,39 @@ export const useLocalElementState = (
         clearInterval(backupIntervalRef.current);
       }
     };
-  }, [localElements, scriptId]);
+  }, [localElements, scriptId, isOnline]);
 
-  // Enhanced backup restoration
+  // Enhanced backup restoration from Dexie
   useEffect(() => {
-    if (scriptId && (!initialElements || initialElements.length === 0) && localElements.length === 0) {
-      try {
-        const backup = localStorage.getItem(`scriptBackup_${scriptId}`);
-        if (backup) {
-          const parsedBackup = JSON.parse(backup);
+    const restoreFromDexie = async () => {
+      if (scriptId && (!initialElements || initialElements.length === 0) && localElements.length === 0) {
+        try {
+          const offlineElements = await db.script_elements
+            .where('script_id')
+            .equals(scriptId)
+            .sortBy('position');
 
-          // Handle both old and new backup formats
-          const elements = parsedBackup.elements || parsedBackup;
-          const backupTimestamp = parsedBackup.timestamp || 0;
+          if (offlineElements && offlineElements.length > 0) {
+            console.log(`Restoring from Dexie: ${offlineElements.length} elements`);
 
-          if (Array.isArray(elements) && elements.length > 0) {
-            // Check if backup is recent (within 24 hours)
-            const isRecentBackup = Date.now() - backupTimestamp < 24 * 60 * 60 * 1000;
-
-            console.log(`Restoring enhanced backup: ${elements.length} elements (recent: ${isRecentBackup})`);
-
-            // SORT BACKUP before restoring
-            const sortedBackup = [...elements].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
-
-            setLocalElements(sortedBackup);
-            localElementsRef.current = sortedBackup;
+            setLocalElements(offlineElements);
+            localElementsRef.current = offlineElements;
             setUseLocalElements(true);
-            setLastSyncTimestamp(backupTimestamp);
+            setLastSyncTimestamp(Date.now());
 
             toast({
-              title: "Backup Restored",
-              description: `Recovered ${elements.length} elements from ${isRecentBackup ? 'recent' : 'older'} backup. Please save to secure your changes.`,
-              duration: 6000,
+              title: "Local Copy Restored",
+              description: `Recovered ${offlineElements.length} elements from local storage.`,
+              duration: 4000,
             });
           }
+        } catch (e) {
+          console.error('Error restoring from Dexie:', e);
         }
-      } catch (e) {
-        console.error('Error restoring enhanced backup:', e);
       }
-    }
+    };
+
+    restoreFromDexie();
   }, [scriptId, initialElements, localElements.length, toast]);
 
   // Cleanup on unmount

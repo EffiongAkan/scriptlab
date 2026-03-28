@@ -3,19 +3,24 @@ import React from "react";
 import { Link, useLocation } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu } from "lucide-react";
+import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu, DollarSign, Shield, Zap } from "lucide-react";
 import { useScriptSave } from "@/hooks/useScriptSave";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useAuth } from "@/integrations/supabase/auth";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAICredits } from "@/hooks/useAICredits";
+import { cn } from "@/lib/utils";
 
 const menuItems = [
   { title: "Home", path: "/", icon: Home },
   { title: "Dashboard", path: "/dashboard", icon: Layout },
   { title: "Plot Generation", path: "/plot-generator", icon: BookOpen },
-  { title: "Settings", path: "/settings", icon: Settings },
   { title: "Premium", path: "/premium", icon: Crown },
   { title: "Version Control", path: "/version-control", icon: GitBranch },
+  { title: "Settings", path: "/settings", icon: Settings },
 ];
 
 export const AppTopbar: React.FC = () => {
@@ -29,6 +34,26 @@ export const AppTopbar: React.FC = () => {
 
   const { saveScript, isSaving } = useScriptSave(scriptId || "");
   const { elements, scriptData } = useScriptContent(scriptId || "");
+  const { user } = useAuth();
+  const { data: credits } = useAICredits();
+
+  const { data: isAdmin = false } = useQuery({
+    queryKey: ['user-admin-status', user?.id],
+    queryFn: async () => {
+      if (!user) return false;
+      const { data, error } = await supabase.rpc('is_admin', { user_id: user.id });
+      if (error) return false;
+      return data || false;
+    },
+    enabled: !!user,
+  });
+
+  const finalMenuItems = [...menuItems];
+  if (isAdmin) {
+    finalMenuItems.push({ title: "Admin", path: "/admin", icon: Shield });
+  }
+
+  const isLowCredits = (credits ?? 0) < 5;
 
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saving' | 'success' | 'error'>('idle');
 
@@ -93,7 +118,7 @@ export const AppTopbar: React.FC = () => {
       {/* Desktop Navigation */}
       <div className="hidden md:flex flex-1 items-center justify-center gap-2 ml-3">
         {
-          menuItems.map(item => {
+          finalMenuItems.map(item => {
             const isActive = location.pathname === item.path;
             return (
               <Button
@@ -141,7 +166,7 @@ export const AppTopbar: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-2">
-                {menuItems.map(item => {
+                {finalMenuItems.map(item => {
                   const isActive = location.pathname === item.path;
                   return (
                     <Button
@@ -167,23 +192,42 @@ export const AppTopbar: React.FC = () => {
         </Sheet>
       </div>
 
-      {/* Save Button */}
-      <Button
-        onClick={handleSaveProject}
-        className={`bg-naija-gold text-black hover:bg-naija-gold-dark ml-2 px-3 md:px-4 ${saveStatus === 'success' ? "ring ring-naija-green ring-offset-2" : ""}`}
-        disabled={isSaving || saveStatus === 'saving'}
-        size={isMobile ? "sm" : "default"}
-        aria-label="Save"
-      >
-        <Save className="h-4 w-4 mr-1" />
-        <span className="hidden sm:inline">
-          {isSaving || saveStatus === 'saving'
-            ? "Saving..."
-            : saveStatus === 'success'
-              ? "Saved!"
-              : "Save"}
-        </span>
-      </Button>
+      {/* Right Actions */}
+      <div className="flex items-center gap-2">
+        {/* Credits Badge */}
+        <Link to="/premium?tab=credits" className="flex">
+          <Button
+            variant="outline"
+            size={isMobile ? "sm" : "default"}
+            className={cn(
+              "px-3 border-sidebar-border bg-sidebar-accent/50 hover:bg-sidebar-accent gap-2",
+              isLowCredits ? "text-red-400 border-red-500/30" : "text-naija-gold"
+            )}
+            title="AI Credits"
+          >
+            <Zap className="h-4 w-4" />
+            <span className="font-semibold">{credits ?? 0}</span>
+          </Button>
+        </Link>
+
+        {/* Save Button */}
+        <Button
+          onClick={handleSaveProject}
+          className={`bg-naija-gold text-black hover:bg-naija-gold-dark ml-2 px-3 md:px-4 ${saveStatus === 'success' ? "ring ring-naija-green ring-offset-2" : ""}`}
+          disabled={isSaving || saveStatus === 'saving'}
+          size={isMobile ? "sm" : "default"}
+          aria-label="Save"
+        >
+          <Save className="h-4 w-4 mr-1" />
+          <span className="hidden sm:inline">
+            {isSaving || saveStatus === 'saving'
+              ? "Saving..."
+              : saveStatus === 'success'
+                ? "Saved!"
+                : "Save"}
+          </span>
+        </Button>
+      </div>
     </nav>
   );
 };

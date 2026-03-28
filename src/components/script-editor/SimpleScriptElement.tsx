@@ -12,7 +12,8 @@ interface SimpleScriptElementProps {
   onChange: (id: string, content: string) => void;
   onFocus: () => void;
   onEnterPress?: (currentId: string) => void;
-  revision?: number; // Prop to trigger force-sync
+  revision?: number;
+  scriptElements: ScriptElementType[]; // Full list for autocomplete
 }
 
 export const SimpleScriptElement = ({
@@ -22,7 +23,8 @@ export const SimpleScriptElement = ({
   onChange,
   onFocus,
   onEnterPress,
-  revision
+  revision,
+  scriptElements,
 }: SimpleScriptElementProps) => {
   const [localContent, setLocalContent] = useState(content);
   const { focusedElementId, setFocusedElementId } = useScriptEditor();
@@ -111,7 +113,7 @@ export const SimpleScriptElement = ({
           onEnterPress={handleEnter}
           placeholder={getPlaceholder()}
           elementType={type}
-          scriptElements={[]}
+          scriptElements={scriptElements}
           className={cn(
             "w-full font-screenplay",
             "focus:outline-none",

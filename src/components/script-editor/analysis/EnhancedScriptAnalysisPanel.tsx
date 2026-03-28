@@ -26,6 +26,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ImplementSuggestionsButton } from './ImplementSuggestionsButton';
 
 import { useParams } from 'react-router-dom';
 
@@ -34,6 +35,7 @@ interface EnhancedScriptAnalysisPanelProps {
   genre?: Genre;
   language?: Language;
   onApplySuggestion?: (elementId: string, newContent: string) => void;
+  onImplementAllSuggestions?: (updatedElements: ScriptElementType[]) => void;
   synopsis?: string;
   industry?: string;
 }
@@ -43,6 +45,7 @@ export const EnhancedScriptAnalysisPanel: React.FC<EnhancedScriptAnalysisPanelPr
   genre,
   language,
   onApplySuggestion,
+  onImplementAllSuggestions,
   synopsis,
   industry
 }) => {
@@ -124,6 +127,15 @@ export const EnhancedScriptAnalysisPanel: React.FC<EnhancedScriptAnalysisPanelPr
                 {analytics.analysisProgress.completed}/{analytics.analysisProgress.total} sections complete
               </span>
             )}
+            {/* Implement All Suggestions */}
+            <ImplementSuggestionsButton
+              recommendations={analytics.recommendations}
+              elements={elements}
+              onImplemented={(updated) => {
+                if (onImplementAllSuggestions) onImplementAllSuggestions(updated);
+              }}
+              disabled={isLoading || analytics.analysisProgress.completed === 0}
+            />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button

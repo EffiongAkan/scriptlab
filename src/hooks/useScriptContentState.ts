@@ -157,34 +157,23 @@ export const useScriptContentState = (
       // This is the most robust way to ensure no duplicates are created
       const updatedElements = [...elementsArray];
       updatedElements.splice(insertIndex, 0, newElement);
-      const elementIds = updatedElements.map(el => el.id);
 
-      // Construct the new state for history immediately
-      pushState(updatedElements);
+      // CRITICAL FIX: Re-assign strict sequential positions for the NEW history frame 
+      // so if we Undo/Redo, the elements are perfectly sorted and don't pop to index 0 (top of script).
+      const perfectlyOrderedElements = updatedElements.map((el, idx) => ({
+        ...el,
+        position: idx
+      }));
 
-      // INSERT into database with a temporary safe position at the end of the array.
-      // We must insert BEFORE we call reorderElementsAtomic, otherwise it fails to update the missing ID.
-      supabase.from('script_elements').insert({
-        id: newElement.id,
-        script_id: newElement.script_id,
-        type: newElement.type,
-        content: newElement.content,
-        position: elementsArray.length // temporary safe position to avoid constraint violation
-      }).then(({ error }) => {
-        if (error) {
-          console.error("Error inserting new element:", error);
-          toast({
-            title: "Insert Failed",
-            description: "Failed to save the new element. Please try again.",
-            variant: "destructive"
-          });
-        }
+      const elementIds = perfectlyOrderedElements.map(el => el.id);
 
-        // Use atomic reorder to persist their correct swapped positions to DB
-        // Block realtime sync for a few extra seconds during this transaction
-        blockRealtimeSync(3000);
-        reorderElementsAtomic(elementIds);
-      });
+      // Construct the new state for history immediately using the perfectly ordered elements
+      pushState(perfectlyOrderedElements);
+
+      // CRITICAL FIX: Sync the entire ordered array atomically using our optimized bulk RPC
+      // instead of a partial append-and-reorder. This prevents unique constraint collisions.
+      syncMultipleElementsToSupabase(perfectlyOrderedElements);
+      blockRealtimeSync(3000);
 
       // Fix focus: Focus the exactly newly created element instead of guessing it's at the end
       setTimeout(() => {

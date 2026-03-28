@@ -7,6 +7,7 @@ interface ScriptAnalysisTabContentProps {
   genre?: Genre;
   language?: Language;
   onApplySuggestion?: (elementId: string, newContent: string) => void;
+  onImplementAllSuggestions?: (updatedElements: any[]) => void;
   synopsis?: string;
   industry?: string;
 }
@@ -16,6 +17,7 @@ export const ScriptAnalysisTabContent: React.FC<ScriptAnalysisTabContentProps> =
   genre,
   language,
   onApplySuggestion,
+  onImplementAllSuggestions,
   synopsis,
   industry
 }) => {
@@ -24,6 +26,7 @@ export const ScriptAnalysisTabContent: React.FC<ScriptAnalysisTabContentProps> =
     genre={genre}
     language={language}
     onApplySuggestion={onApplySuggestion}
+    onImplementAllSuggestions={onImplementAllSuggestions}
     synopsis={synopsis}
     industry={industry}
   />;

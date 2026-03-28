@@ -36,7 +36,7 @@ export function ScriptEditorProvider({ children }: { children: React.ReactNode }
     setCurrentElement({
       id: uuidv4(),
       type,
-      content: content || defaultContent
+      content: content ?? defaultContent
     });
   };
 

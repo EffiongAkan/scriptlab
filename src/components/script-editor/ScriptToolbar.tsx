@@ -1,7 +1,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Save, Undo2, Redo2, Keyboard, AlertCircle, Sparkles, Clock, Users, Menu, FileUp, Settings2 } from "lucide-react";
+import { Save, Undo2, Redo2, Keyboard, AlertCircle, Sparkles, Clock, Users, Menu, FileUp, Settings2, CaseUpper, CaseLower } from "lucide-react";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
 import { useScriptHistory } from "@/contexts/ScriptHistoryContext";
@@ -134,7 +134,7 @@ export const ScriptToolbar = ({
   return (
     <>
       {/* Desktop Toolbar - Hidden on mobile */}
-      <div className="hidden md:flex justify-between items-center py-4 border-b border-gray-700 w-full gap-2 px-0 bg-[#1A1A1A] sticky top-0 z-50">
+      <div className="hidden md:flex justify-between items-center py-4 border-b border-gray-700 w-full gap-2 px-0 bg-[#1A1A1A] sticky top-0 z-40">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 md:gap-3">
             {/* Editable Title */}
@@ -323,6 +323,33 @@ export const ScriptToolbar = ({
               >
                 <Redo2 className="h-4 w-4" />
                 Redo
+              </Button>
+            </div>
+
+            <div className="my-1 border-t border-gray-800" />
+
+            <div className="grid grid-cols-2 gap-1 p-1">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 flex flex-col items-center justify-center gap-1 text-[10px]"
+                onClick={() => {
+                  document.dispatchEvent(new CustomEvent('script-transform-case', { detail: { mode: 'uppercase' } }));
+                }}
+              >
+                <CaseUpper className="h-4 w-4" />
+                Uppercase
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-10 flex flex-col items-center justify-center gap-1 text-[10px]"
+                onClick={() => {
+                  document.dispatchEvent(new CustomEvent('script-transform-case', { detail: { mode: 'lowercase' } }));
+                }}
+              >
+                <CaseLower className="h-4 w-4" />
+                Lowercase
               </Button>
             </div>
 

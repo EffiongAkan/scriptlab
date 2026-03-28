@@ -1,8 +1,6 @@
 
 import React from 'react';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { User, MapPin, Clock, Zap, ArrowRight } from 'lucide-react';
+import { User, MapPin, ArrowRight } from 'lucide-react';
 import { AutoCompleteType } from '@/hooks/useScriptAutoComplete';
 
 interface AutoCompleteSuggestion {
@@ -32,82 +30,80 @@ export const AutoCompleteDropdown = ({
 
   const getIcon = (type: AutoCompleteType) => {
     switch (type) {
-      case 'character':
-        return <User className="h-3 w-3" />;
-      case 'location':
-        return <MapPin className="h-3 w-3" />;
-      case 'time':
-        return <Clock className="h-3 w-3" />;
-      case 'action':
-        return <Zap className="h-3 w-3" />;
-      case 'transition':
-        return <ArrowRight className="h-3 w-3" />;
-      default:
-        return null;
-    }
-  };
-
-  const getTypeColor = (type: AutoCompleteType) => {
-    switch (type) {
-      case 'character':
-        return 'bg-blue-100 text-blue-800';
-      case 'location':
-        return 'bg-green-100 text-green-800';
-      case 'time':
-        return 'bg-purple-100 text-purple-800';
-      case 'action':
-        return 'bg-orange-100 text-orange-800';
-      case 'transition':
-        return 'bg-red-100 text-red-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+      case 'character': return <User className="h-3.5 w-3.5" />;
+      case 'location':  return <MapPin className="h-3.5 w-3.5" />;
+      case 'transition': return <ArrowRight className="h-3.5 w-3.5" />;
+      default: return null;
     }
   };
 
   return (
-    <Card 
-      className="absolute z-50 w-80 max-h-64 overflow-y-auto border shadow-lg bg-background"
-      style={{
-        top: position.top,
-        left: position.left,
-      }}
+    <div
+      className="absolute z-[100] animate-in fade-in slide-in-from-top-1 duration-150"
+      style={{ top: position.top, left: position.left }}
     >
-      <div className="p-2">
-        <div className="text-xs text-muted-foreground mb-2 px-2">
-          Suggestions (Use ↑↓ to navigate, Enter to select)
+      {/* Arrow pointing up to the input */}
+      <div className="ml-6 w-0 h-0 border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-[#2a2a3a]" />
+
+      <div className="rounded-xl overflow-hidden shadow-2xl border border-white/10 bg-[#1c1c2e] min-w-[260px] max-w-xs">
+        {/* Header */}
+        <div className="flex items-center justify-between px-3 py-1.5 bg-white/5 border-b border-white/10">
+          <span className="text-[9px] font-bold uppercase tracking-[0.15em] text-gray-500">
+            Characters in script
+          </span>
+          <span className="text-[9px] text-gray-600">↑↓ navigate · ↵ select</span>
         </div>
-        {suggestions.map((suggestion, index) => (
-          <div
-            key={`${suggestion.type}-${suggestion.text}-${index}`}
-            className={`
-              flex items-center gap-2 p-2 rounded cursor-pointer transition-colors
-              ${index === selectedIndex 
-                ? 'bg-primary/10 border border-primary/20' 
-                : 'hover:bg-muted/50'
-              }
-            `}
-            onClick={() => onSelect(suggestion)}
-          >
-            <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Badge 
-                variant="secondary" 
-                className={`${getTypeColor(suggestion.type)} text-xs px-1.5 py-0.5 flex items-center gap-1`}
+
+        {/* Suggestion rows */}
+        <div className="py-1">
+          {suggestions.map((suggestion, index) => {
+            const isSelected = index === selectedIndex;
+            // Highlight matching prefix
+            const typed = suggestion.text.substring(0, suggestion.text.length);
+
+            return (
+              <button
+                key={`${suggestion.type}-${suggestion.text}-${index}`}
+                type="button"
+                onClick={() => onSelect(suggestion)}
+                className={`
+                  w-full flex items-center gap-3 px-3 py-2 text-left transition-all duration-75
+                  ${isSelected
+                    ? 'bg-gradient-to-r from-naija-green/25 to-emerald-600/10 border-l-2 border-naija-green text-white'
+                    : 'border-l-2 border-transparent text-gray-300 hover:bg-white/5 hover:text-white'
+                  }
+                `}
               >
-                {getIcon(suggestion.type)}
-                {suggestion.type}
-              </Badge>
-              <span className="font-mono text-sm truncate">
-                {suggestion.text}
-              </span>
-            </div>
-            {suggestion.description && (
-              <span className="text-xs text-muted-foreground">
-                {suggestion.description}
-              </span>
-            )}
-          </div>
-        ))}
+                {/* Icon bubble */}
+                <span
+                  className={`
+                    flex items-center justify-center w-6 h-6 rounded-full text-xs shrink-0
+                    ${isSelected ? 'bg-naija-green/30 text-naija-green' : 'bg-gray-700/60 text-gray-400'}
+                  `}
+                >
+                  {getIcon(suggestion.type)}
+                </span>
+
+                {/* Name */}
+                <span className="font-mono font-semibold text-sm tracking-wider flex-1 truncate">
+                  {suggestion.text}
+                </span>
+
+                {/* Tag */}
+                {suggestion.description && (
+                  <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full shrink-0 ${
+                    isSelected
+                      ? 'bg-naija-green/20 text-naija-green'
+                      : 'bg-gray-700 text-gray-500'
+                  }`}>
+                    {suggestion.description}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
-    </Card>
+    </div>
   );
 };

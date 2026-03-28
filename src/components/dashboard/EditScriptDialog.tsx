@@ -7,7 +7,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { Sparkles, Loader2 } from "lucide-react";
+import { Sparkles, Loader2, Coins } from "lucide-react";
+import { useAICredits, deductAICredits } from "@/hooks/useAICredits";
 
 interface EditScriptDialogProps {
     script: {
@@ -33,8 +34,18 @@ export function EditScriptDialog({ script, open, onOpenChange, onUpdate }: EditS
     const [description, setDescription] = useState(script.description || "");
     const [isSaving, setIsSaving] = useState(false);
     const [isGenerating, setIsGenerating] = useState(false);
+    const { data: aiCredits, refetch: refetchCredits } = useAICredits();
 
     const handleGenerateAI = async () => {
+        if (aiCredits !== undefined && aiCredits < 2) {
+            toast({
+                title: "Insufficient Credits",
+                description: "You need at least 2 AI credits to auto-generate a description.",
+                variant: "destructive"
+            });
+            return;
+        }
+
         setIsGenerating(true);
         try {
             // 1. Fetch script content snippet
@@ -65,8 +76,8 @@ export function EditScriptDialog({ script, open, onOpenChange, onUpdate }: EditS
             // 2. Call AI Edge Function
             const { data: aiData, error: aiError } = await supabase.functions.invoke('generate-script-content', {
                 body: {
-                    prompt: `Generate a compelling, single-sentence logline (description) for this movie script. It should be concise (under 50 words) and intriguing. \n\nScript Snippet:\n${contentSnippet}`,
-                    systemPrompt: "You are a professional script consultant specializing in writing enticing loglines.",
+                    promptOverride: `Generate a compelling, single-sentence logline (description) for this movie script. It should be concise (under 50 words) and intriguing. \n\nScript Snippet:\n${contentSnippet}`,
+                    customSystemPrompt: "You are a professional script consultant specializing in writing enticing loglines.",
                     scriptId: script.id,
                     active_ai_provider: 'deepseek' // or use default
                 }
@@ -74,6 +85,12 @@ export function EditScriptDialog({ script, open, onOpenChange, onUpdate }: EditS
 
             if (aiError) throw aiError;
             if (!aiData.success) throw new Error(aiData.error || "AI generation failed");
+
+            // Deduct credits after successful generation
+            const creditResult = await deductAICredits(2, "Generate Script Logline", `Auto-generated logline for script ${script.id}`);
+            if (creditResult.success) {
+                refetchCredits();
+            }
 
             // 3. Update state
             setDescription(aiData.content.replace(/^Logline:\s*/i, "").replace(/^"|"$/g, "").trim());
@@ -197,12 +214,16 @@ export function EditScriptDialog({ script, open, onOpenChange, onUpdate }: EditS
                                 {isGenerating ? (
                                     <>
                                         <Loader2 className="mr-2 h-3 w-3 animate-spin" />
-                                        Analyzing Script...
+                                        Analyzing...
                                     </>
                                 ) : (
                                     <>
                                         <Sparkles className="mr-2 h-3 w-3" />
                                         Auto-Generate with AI
+                                        <div className="ml-2 flex items-center text-[10px] bg-purple-100 px-1.5 py-0.5 rounded-full text-purple-600">
+                                            <Coins className="w-3 h-3 mr-1" />
+                                            2
+                                        </div>
                                     </>
                                 )}
                             </Button>

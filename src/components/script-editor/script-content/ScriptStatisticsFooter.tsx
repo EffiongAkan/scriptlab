@@ -47,30 +47,32 @@ export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFoote
   }, [scriptElements]);
 
   return (
-    <div className="mt-4 p-3 bg-gray-800 rounded-md text-gray-300 text-sm flex flex-wrap items-center justify-between">
-      <div className="flex items-center space-x-4">
+    <div className="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 p-2 sm:p-3 px-4 sm:px-6 bg-gray-900/90 backdrop-blur-md rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border border-white/10 shadow-2xl w-[calc(100%-1rem)] max-w-[320px] sm:max-w-none sm:min-w-[600px] transition-all duration-300">
+      <div className="flex items-center space-x-6">
         <div className="flex items-center">
-          <FileText className="w-4 h-4 mr-2 text-gray-400" />
-          <span>
-            <span className="font-medium">{statistics.words}</span> words 
-            <span className="text-gray-500 mx-1">|</span>
-            <span className="font-medium">{statistics.characters}</span> characters
+          <FileText className="w-4 h-4 mr-2 text-naija-gold/80" />
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-white tracking-wide">{statistics.words}</span> words
+            <span className="text-gray-600 mx-1">|</span>
+            <span className="font-bold text-white tracking-wide">{statistics.characters}</span> chars
           </span>
         </div>
-        
-        <div className="hidden md:flex items-center">
-          <span className="text-gray-500 mx-2">|</span>
-          <span>
-            <span className="font-medium">{statistics.scenes}</span> scenes
-            <span className="text-gray-500 mx-1">|</span>
-            <span className="font-medium">{statistics.dialogueCount}</span> dialogue blocks
+
+        <div className="hidden lg:flex items-center">
+          <span className="text-gray-600 mr-4">|</span>
+          <span className="flex items-center gap-1">
+            <span className="font-bold text-white tracking-wide">{statistics.scenes}</span> scenes
+            <span className="text-gray-600 mx-1">|</span>
+            <span className="font-bold text-white tracking-wide">{statistics.dialogueCount}</span> dialogue
           </span>
         </div>
       </div>
-      
-      <div className="flex items-center">
-        <Clock className="w-4 h-4 mr-2 text-gray-400" />
-        <span>Est. runtime: <span className="font-medium">{statistics.estimatedRuntime}</span> min</span>
+
+      <div className="flex items-center ml-6">
+        <Clock className="w-4 h-4 mr-2 text-naija-gold/80" />
+        <span className="flex items-center gap-1">
+          Est. runtime: <span className="font-bold text-white tracking-wide">{statistics.estimatedRuntime}</span> min
+        </span>
       </div>
     </div>
   );

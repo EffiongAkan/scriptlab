@@ -82,9 +82,39 @@ export const ScriptElementList = ({
 
   // Handle creating a new element when Enter is pressed
   const handleEnterPress = useCallback((currentElementId: string) => {
-    // Create new action element (most common type in screenplays)
-    insertScriptElement('action', '');
-  }, [insertScriptElement]);
+    // Find current element to determine logical next type
+    const currentEl = scriptElements.find(el => el.id === currentElementId);
+    if (!currentEl) {
+      insertScriptElement('action', '');
+      return;
+    }
+
+    // Apply industry-standard screenplay formatting transitions
+    let nextType: ScriptElementType['type'] = 'action';
+
+    switch (currentEl.type) {
+      case 'heading':
+        nextType = 'action';
+        break;
+      case 'action':
+        nextType = 'action';
+        break;
+      case 'character':
+        nextType = 'dialogue';
+        break;
+      case 'dialogue':
+        nextType = 'action';
+        break;
+      case 'parenthetical':
+        nextType = 'dialogue';
+        break;
+      case 'transition':
+        nextType = 'heading';
+        break;
+    }
+
+    insertScriptElement(nextType, '');
+  }, [insertScriptElement, scriptElements]);
 
   // Handle element type change
   const handleTypeChange = useCallback(async (elementId: string, newType: ScriptElementType['type']) => {
@@ -118,6 +148,30 @@ export const ScriptElementList = ({
       });
     }
   }, [updateElement, scriptElements, toast]);
+
+  // Listen for Tab-triggered format changes from useScriptShortcuts
+  useEffect(() => {
+    const handleFormatChange = (e: any) => {
+      const { id, currentType } = e.detail;
+      const cycle: ScriptElementType['type'][] = ['heading', 'action', 'character', 'dialogue', 'parenthetical', 'transition'];
+      const currentIndex = cycle.indexOf(currentType);
+      const nextType = cycle[(currentIndex + 1) % cycle.length];
+
+      if (changeElementType) {
+        changeElementType(id, nextType);
+      } else {
+        updateElement(id, { type: nextType });
+      }
+
+      toast({
+        title: 'Format Changed',
+        description: `Switched to ${nextType}`,
+      });
+    };
+
+    document.addEventListener('script-format-change', handleFormatChange);
+    return () => document.removeEventListener('script-format-change', handleFormatChange);
+  }, [changeElementType, updateElement, toast]);
 
   // Optimized element tracking for new additions
   useEffect(() => {
@@ -296,6 +350,7 @@ export const ScriptElementList = ({
                   onChange={debouncedContentChange}
                   onFocus={() => onElementFocus(element.id)}
                   onEnterPress={handleEnterPress}
+                  scriptElements={scriptElements}
                 />
               </div>
             </ContextMenuTrigger>

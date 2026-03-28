@@ -178,11 +178,12 @@ export const SmartScriptInput = ({
     if (!contentRef.current) return;
 
     const element = contentRef.current;
-    const rect = element.getBoundingClientRect();
 
+    // The dropdown is absolute inside a relative container, 
+    // so we position it relative to the element's bottom.
     setDropdownPosition({
-      top: rect.bottom + 4,
-      left: rect.left
+      top: element.offsetHeight + 2,
+      left: 0
     });
   }, []);
 

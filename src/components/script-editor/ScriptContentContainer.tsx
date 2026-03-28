@@ -388,6 +388,15 @@ export const ScriptContentContainer = ({
     }
   }, [scriptElements.length]);
 
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Ensure view scrolls to the top of the paper when navigating to a new page
+  useEffect(() => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [currentPage]);
+
   return (
     <div className="flex flex-col w-full bg-[#1A1A1A] h-full" role="main" aria-label="Script editor main area">
       <div className="flex flex-1 overflow-hidden h-full border border-gray-800 rounded-lg relative">
@@ -429,11 +438,12 @@ export const ScriptContentContainer = ({
         {/* Center: Script Canvas */}
         <main className="flex-1 bg-[#121212] relative overflow-hidden">
           <div
-            className="absolute inset-0 overflow-y-auto overscroll-contain flex flex-col items-center"
+            ref={scrollContainerRef}
+            className="absolute inset-0 overflow-y-auto overscroll-contain flex flex-col items-center scroll-smooth"
             style={{ overscrollBehaviorY: 'contain' }}
           >
             {/* Format Toolbar Integrated into Writing Area */}
-            <div className="w-full z-[60] fixed bottom-0 left-0 md:relative md:sticky md:top-0">
+            <div className="w-full z-30 fixed bottom-0 left-0 md:relative md:sticky md:top-0">
               <ScriptFormatToolbar
                 zoom={zoom}
                 onZoomChange={setZoom}
@@ -443,13 +453,13 @@ export const ScriptContentContainer = ({
                 activeElementType={activeElementType}
                 onChangeElementType={(newType) => {
                   if (focusedElementId) {
-                    changeElementType(focusedElementId, newType);
+                    changeElementType(focusedElementId, newType as ScriptElementType['type']);
                   }
                 }}
               />
             </div>
 
-            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-16 md:pb-10">
+            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-32 md:pb-32">
               <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl mb-12 md:mb-0">
                 {/* "Saving..." Indicator positioned top right of paper */}
                 <div className="hidden md:flex absolute -top-10 right-0 items-center gap-2 font-medium text-gray-500 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5 z-10">

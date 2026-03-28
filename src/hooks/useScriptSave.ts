@@ -6,11 +6,14 @@ import { useScriptUUID } from '@/hooks/useScriptUUID';
 import { useScriptMetadata } from '@/hooks/useScriptMetadata';
 import { useScriptElements } from '@/hooks/useScriptElements';
 import { supabase } from '@/integrations/supabase/client';
+import { useSyncStatus } from '@/contexts/SyncStatusContext';
+import { db } from '@/db/offline-db';
 
 export const useScriptSave = (scriptId: string) => {
   const [isSaving, setIsSaving] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const { toast } = useToast();
+  const { isOnline } = useSyncStatus();
   const { isValidUuid, generateUuid } = useScriptUUID();
   const { saveScriptMetadata } = useScriptMetadata();
   const { saveElements } = useScriptElements();
@@ -38,7 +41,7 @@ export const useScriptSave = (scriptId: string) => {
     setIsSaving(true);
 
     try {
-      console.log('Starting coordinated save process for script:', scriptId);
+      console.log('Starting coordinated save process for script:', scriptId, 'Online:', isOnline);
 
       // Validate and sanitize elements
       const elementsToSave = Array.isArray(elements)
@@ -48,7 +51,7 @@ export const useScriptSave = (scriptId: string) => {
         }))
         : [];
 
-      // Get current user
+      // Get current user (need this for both online and offline to know user_id)
       const { data: { user }, error: userError } = await supabase.auth.getUser();
       if (userError || !user) {
         toast({
@@ -62,8 +65,64 @@ export const useScriptSave = (scriptId: string) => {
       const userId = user.id;
       const validScriptId = isValidUuid(scriptId) ? scriptId : generateUuid();
       const scriptTitle = title && title.trim() !== '' ? title.trim() : 'Untitled Script';
+      const timestamp = new Date().toISOString();
 
-      // Save metadata and elements in sequence to ensure consistency
+      // === OFFLINE BRANCH ===
+      if (!isOnline) {
+        console.log('User is offline, performing local-only save...');
+        
+        try {
+          // 1. Save metadata locally
+          await db.scripts.put({
+            id: validScriptId,
+            title: scriptTitle,
+            description: treatment,
+            user_id: userId,
+            updated_at: timestamp,
+            syncStatus: 'pending'
+          });
+
+          // 2. Save elements locally
+          const offlineElements = elementsToSave.map(el => ({
+            ...el,
+            script_id: validScriptId,
+            updated_at: timestamp,
+            syncStatus: 'pending' as const
+          }));
+          
+          await db.transaction('rw', db.script_elements, async () => {
+             await db.script_elements.where('script_id').equals(validScriptId).delete();
+             await db.script_elements.bulkAdd(offlineElements as any);
+          });
+
+          // 3. Add to sync queue for later reconciliation
+          await db.sync_queue.add({
+             table: 'scripts',
+             action: 'upsert',
+             data: { id: validScriptId, title: scriptTitle, description: treatment, user_id: userId, updated_at: timestamp },
+             timestamp: Date.now()
+          });
+
+          await db.sync_queue.add({
+            table: 'script_elements',
+            action: 'upsert',
+            data: elementsToSave.map(el => ({ ...el, script_id: validScriptId })),
+            timestamp: Date.now()
+          });
+
+          setLastSavedAt(new Date());
+          toast({
+            title: "Saved Locally",
+            description: `"${scriptTitle}" saved offline. Changes will sync when online.`,
+          });
+          return true;
+        } catch (offlineErr) {
+          console.error('Offline save failed:', offlineErr);
+          throw new Error('Failed to save to local storage.');
+        }
+      }
+
+      // === ONLINE BRANCH (ORIGINAL) ===
       console.log('Saving metadata first...');
       const metadataSuccess = await saveScriptMetadata(validScriptId, userId, scriptTitle, treatment);
 

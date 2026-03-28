@@ -10,13 +10,17 @@ export interface ScriptElement {
 }
 
 export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
-  const lines = scriptContent.split('\n').filter(line => line.trim());
+  const lines = scriptContent.split('\n');
   const elements: ScriptElement[] = [];
   let position = 0;
+  let hasBlankLineBefore = true;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i].trim();
-    if (!line) continue;
+    if (!line) {
+      hasBlankLineBefore = true;
+      continue;
+    }
 
     // IGNORE KNOWN PLACEHOLDER ARTIFACTS (AI Hallucinated labels)
     const lowerLine = line.toLowerCase().replace(/[^\w\s]/g, ''); // Remove punctuation for matching
@@ -90,19 +94,18 @@ export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
       elementType = 'character';
       content = formatCharacterName(line);
     }
-    else if (i > 0 && elements[elements.length - 1]?.type === 'character' &&
-      !line.startsWith('(') &&
-      !line.match(/^[A-Z][A-Z\s\-\.\']+$/) &&
-      !line.match(/^(INT\.|EXT\.|FADE|CUT TO)/i)) {
+    // If previous element is Character or Parenthetical, this MUST be Dialogue
+    // Even if there is a blank line before it, because Characters must speak!
+    else if (elements.length > 0 &&
+      (elements[elements.length - 1]?.type === 'character' || elements[elements.length - 1]?.type === 'parenthetical') &&
+      !isLikelyNewElement(line)) {
       elementType = 'dialogue';
       content = formatDialogue(line);
     }
-    else if (i > 0 &&
-      (elements[elements.length - 1]?.type === 'dialogue' ||
-        elements[elements.length - 1]?.type === 'parenthetical') &&
-      !isLikelyNewElement(line) &&
-      !line.match(/^[A-Z][A-Z\s\-\.\']+$/) &&
-      line.length > 2) {
+    // Dialogue continuation (following another dialogue line without a blank line break)
+    else if (!hasBlankLineBefore && elements.length > 0 &&
+      elements[elements.length - 1]?.type === 'dialogue' &&
+      !isLikelyNewElement(line)) {
       elementType = 'dialogue';
       content = formatDialogue(line);
     }
@@ -118,6 +121,9 @@ export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
       content: content.trim(),
       position: position++
     });
+
+    // Reset the blank line tracker since we just pushed a valid element
+    hasBlankLineBefore = false;
   }
 
   // Final cleanup: filter out any elements with empty content
@@ -125,43 +131,47 @@ export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
 };
 
 const isCharacterName = (line: string, lines: string[], currentIndex: number): boolean => {
-  // Enhanced character name detection
-  // 1. Length check (usually less than 50 characters)
-  // 2. Contains only letters, spaces, hyphens, periods, apostrophes, numbers
-  // 3. Not a scene heading or transition
-  // 4. Followed by dialogue or parenthetical
-  // 5. All caps or mixed case (will be formatted to all caps)
+  // A Character name in Fountain strictly follows these rules:
+  // 1. Must be ALL CAPS.
+  // 2. Can include numbers, spaces, hyphens, and parenthesis for extensions like (V.O.) or (PHONE).
+  // 3. Must NOT end with standard sentence punctuation (. ? !).
+  // 4. Must NOT be a scene heading or transition.
+  // 5. Must have dialogue or parenthetical following it.
 
-  if (line.length > 50) return false;
-  if (!line.match(/^[A-Za-z][A-Za-z0-9\s\-\.\']+$/)) return false;
+  if (line.length > 60) return false;
+
+  // Must be strictly uppercase characters, numbers, spaces, and allowed symbols. It can end in parenthesis.
+  if (!line.match(/^[A-Z0-9\s\-\.\'()]+$/)) return false;
+
+  // Exclude scene headings and transitions
   if (line.match(/^(INT\.|EXT\.|INTERIOR|EXTERIOR|FADE|CUT TO|DISSOLVE|WIPE TO|IRIS)/i)) return false;
 
-  // Check for common character name patterns
-  if (line.match(/^[A-Z][A-Z\s\-\.\']+$/)) {
-    // Already all caps, likely a character name
-    return true;
+  // A true character name almost NEVER ends in a period, question mark, or exclamation point.
+  // This prevents ALL-CAPS shouted dialogue like "MARCUS. I JUST SAW YOUR NOTE." from being parsed as Character.
+  if (line.match(/[\.\?\!]$/)) return false;
+
+  // Check if followed by dialogue or parenthetical (skipping any blank lines)
+  let nextIndex = currentIndex + 1;
+  while (nextIndex < lines.length && lines[nextIndex].trim().length === 0) {
+    nextIndex++;
   }
 
-  // Check if followed by dialogue or parenthetical
-  const nextIndex = currentIndex + 1;
   if (nextIndex < lines.length) {
     const nextLine = lines[nextIndex].trim();
     if (nextLine.length > 0) {
-      // Next line should be dialogue, parenthetical, or action
-      // but not another potential character name or scene heading
-      if (!nextLine.match(/^(INT\.|EXT\.|FADE|CUT TO|DISSOLVE)/i) &&
-        !isLikelyCharacterName(nextLine)) {
-        return true;
-      }
+      // Must not be a scene heading or transition
+      if (nextLine.match(/^(INT\.|EXT\.|FADE|CUT TO|DISSOLVE)/i)) return false;
+      return true;
     }
   }
 
-  return false;
+  return true; // Last line of the script and matches all-caps
 };
 
 const isLikelyCharacterName = (line: string): boolean => {
-  return line.length < 50 &&
-    line.match(/^[A-Za-z][A-Za-z\s\-\.\']+$/) !== null &&
+  return line.length < 60 &&
+    line.match(/^[A-Z0-9\s\-\.\'()]+$/) !== null &&
+    !line.match(/[\.\?\!]$/) &&
     !line.match(/^(INT\.|EXT\.|FADE|CUT TO|DISSOLVE)/i);
 };
 

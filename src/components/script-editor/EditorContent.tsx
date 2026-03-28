@@ -18,11 +18,17 @@ import { useScriptHistory } from "@/contexts/ScriptHistoryContext";
 import { Plus, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { parseScriptElements } from "@/utils/scriptElementParser";
+import { NetworkStatusIndicator } from "@/components/script-editor/NetworkStatusIndicator";
+import { useOfflineSync } from "@/hooks/useOfflineSync";
 
 export function EditorContent() {
   const [title, setTitle] = useState("UNTITLED SCREENPLAY");
   const { scriptId } = useParams<{ scriptId: string }>();
   const { toast } = useToast();
+  
+  // Activate background sync
+  useOfflineSync();
+
   const { saveScript, isSaving, lastSavedAt } = useScriptSave(scriptId || '');
   const { elements: loadedElements, scriptData, isLoaded, updateElement, reloadElements } = useScriptContent(scriptId);
   const [activeTab, setActiveTab] = useState<string>("write");
@@ -494,6 +500,19 @@ export function EditorContent() {
           onContentChange={() => setHasUnsavedChanges(true)}
           onApplySuggestion={() => { }}
           onApplyAllSuggestions={() => { }}
+          onImplementAllSuggestions={async (updatedElements) => {
+            // Re-index positions and attach scriptId
+            const positioned = updatedElements.map((el, idx) => ({
+              ...el,
+              script_id: scriptId || '',
+              position: idx,
+            }));
+            pushState(positioned);
+            setHasUnsavedChanges(true);
+            // Auto-save
+            const ok = await saveScript(positioned, title);
+            if (ok) setHasUnsavedChanges(false);
+          }}
           onTabChange={t => setActiveTab(t)}
           isSaving={isSaving}
           lastSavedAt={lastSavedAt}
@@ -503,6 +522,7 @@ export function EditorContent() {
           synopsis={scriptData?.description === 'null' || scriptData?.description === 'undefined' ? undefined : scriptData?.description}
           industry={scriptData?.film_industry === 'null' || scriptData?.film_industry === 'undefined' ? undefined : scriptData?.film_industry}
         />
+        <NetworkStatusIndicator />
       </div>
     </div>
 

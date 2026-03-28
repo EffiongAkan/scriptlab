@@ -30,30 +30,15 @@ export function Layout({ children }: LayoutProps) {
     <AuthGuard>
       <div className="flex min-h-screen w-full bg-background">
         {/* Desktop Sidebar - Hidden on mobile */}
-        <aside className="hidden md:block">
-          <AppSidebar />
-        </aside>
+        {/* Sidebar has been consolidated into Topbar per user request */}
 
         {/* Main Content Area */}
-        <div className={cn(
-          "flex flex-col flex-1",
-          isEditor ? "h-screen overflow-hidden" : "min-h-screen overflow-hidden"
-        )}>
+        <div className="flex flex-col flex-1 h-screen overflow-hidden">
           {/* Fixed Top Navigation Bar - Hidden on mobile editor to save space */}
           {(!isMobile || !isEditor) && (
             <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 shrink-0">
               <div className="flex h-14 items-center gap-2 px-3 md:px-6">
-                {/* Mobile Menu */}
-                <Sheet>
-                  <SheetTrigger asChild className="md:hidden">
-                    <Button variant="ghost" size="icon">
-                      <Menu className="h-5 w-5" />
-                    </Button>
-                  </SheetTrigger>
-                  <SheetContent side="left" className="p-0 w-64">
-                    <AppSidebar />
-                  </SheetContent>
-                </Sheet>
+                {/* Mobile menu has been consolidated to the right side inside AppTopbar */}
 
                 {/* App Topbar */}
                 <div className="flex-1 overflow-hidden">
