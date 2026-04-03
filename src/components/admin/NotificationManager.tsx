@@ -46,6 +46,7 @@ interface NotificationManagerProps {
     subject: string;
     message: string;
     notificationType: 'email' | 'in-app' | 'both';
+    actionUrl?: string;
   }) => void;
   onSaveTemplate: (template: Omit<NotificationTemplate, 'id'>) => void;
 }
@@ -60,7 +61,8 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
   const [selectedUsers, setSelectedUsers] = useState<string[]>([]);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
-  const [notificationType, setNotificationType] = useState<'email' | 'in-app' | 'both'>('email');
+  const [actionUrl, setActionUrl] = useState('');
+  const [notificationType, setNotificationType] = useState<'email' | 'in-app' | 'both'>('both');
   const [searchTerm, setSearchTerm] = useState('');
 
   // Template creation
@@ -91,7 +93,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     }
   };
 
-  const handleSendNotification = (type: 'individual' | 'bulk') => {
+  const handleSend = () => {
     if (!subject.trim() || !message.trim()) {
       toast({
         title: "Error",
@@ -110,17 +112,18 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
       return;
     }
 
+    const type = selectedUsers.length > 1 ? 'bulk' : 'individual';
+    
     onSendNotification({
       type,
       recipients: selectedUsers,
       subject,
       message,
-      notificationType
+      notificationType,
+      actionUrl
     });
 
-    // Reset form
-    setSubject('');
-    setMessage('');
+    // Reset recipients but keep subject/message if user wants to send again
     setSelectedUsers([]);
 
     toast({
@@ -167,6 +170,8 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     switch (status) {
       case 'sent': return <CheckCircle className="h-4 w-4 text-green-500" />;
       case 'failed': return <AlertCircle className="h-4 w-4 text-red-500" />;
+      case 'system':
+        return <Bell className="h-4 w-4 text-amber-500" />;
       case 'pending': return <Clock className="h-4 w-4 text-yellow-500" />;
       default: return <Bell className="h-4 w-4" />;
     }
@@ -278,13 +283,26 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="Your message content..."
-                  rows={6}
+                  rows={4}
                 />
+              </div>
+
+              <div>
+                <Label>Action URL (Optional)</Label>
+                <Input
+                  value={actionUrl}
+                  onChange={(e) => setActionUrl(e.target.value)}
+                  placeholder="e.g. /premium or /editor/..."
+                  className="text-xs"
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Users will be redirected here when they click the notification.
+                </p>
               </div>
 
               <div className="flex gap-2">
                 <Button
-                  onClick={() => handleSendNotification('bulk')}
+                  onClick={handleSend}
                   disabled={selectedUsers.length === 0}
                   className="flex-1"
                 >
@@ -404,8 +422,22 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
                     <div>
                       <div className="font-medium">{item.subject}</div>
                       <div className="text-sm text-muted-foreground">
-                        {item.type === 'bulk' ? `${item.recipients} recipients` : '1 recipient'} •
-                        {new Date(item.sent_at).toLocaleDateString()}
+                        {item.type === 'bulk' ? `${item.recipients} recipients` : '1 recipient'} • {
+                          (() => {
+                            try {
+                              const date = new Date(item.sent_at);
+                              if (isNaN(date.getTime())) throw new Error();
+                              return date.toLocaleString(undefined, {
+                                month: 'short',
+                                day: 'numeric',
+                                hour: 'numeric',
+                                minute: '2-digit'
+                              });
+                            } catch (e) {
+                              return 'Just now';
+                            }
+                          })()
+                        }
                       </div>
                     </div>
                   </div>

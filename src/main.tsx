@@ -7,6 +7,7 @@ import { AuthProvider } from "@/integrations/supabase/auth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { SyncStatusProvider } from "@/contexts/SyncStatusContext";
+import { PostHogProvider } from "@/contexts/PostHogProvider";
 
 // Register Service Worker for PWA / Offline Support
 if ('serviceWorker' in navigator) {
@@ -25,7 +26,9 @@ createRoot(document.getElementById("root")!).render(
       <AuthProvider>
         <SyncStatusProvider>
           <TooltipProvider>
-            <App />
+            <PostHogProvider>
+              <App />
+            </PostHogProvider>
           </TooltipProvider>
         </SyncStatusProvider>
       </AuthProvider>

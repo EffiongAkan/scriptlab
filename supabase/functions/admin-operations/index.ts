@@ -676,20 +676,45 @@ serve(async (req) => {
             })
           }
 
-          const { type, recipients, subject, message, notificationType } = data
+          const { type, recipients, subject, message, notificationType, actionUrl } = data
+          console.log(`[send_notification] Type: ${type}, Recipients: ${recipients.length}, Subject: "${subject}", Type: ${notificationType}`)
 
-          // Log notification for history
-          console.log(`Sending ${type} notification to ${recipients.length} users:`, subject)
+          // 1. In-App Notifications
+          if (notificationType === 'in-app' || notificationType === 'both') {
+            const notificationEntries = recipients.map((recipientId: string) => ({
+              user_id: recipientId,
+              title: subject,
+              message: message,
+              type: 'system',
+              action_url: actionUrl || null,
+              read: false
+            }))
 
-          // Here you would integrate with your notification service
-          // For now, we'll just log it
+            console.log(`[send_notification] Inserting ${notificationEntries.length} entries into notifications table...`)
+            const { data: insertData, error: insertError, count } = await supabaseClient
+              .from('notifications')
+              .insert(notificationEntries)
+              .select()
 
-          return new Response(JSON.stringify({ success: true }), {
+            if (insertError) {
+              console.error('[send_notification] Insert Error:', JSON.stringify(insertError))
+              throw insertError
+            }
+            console.log(`[send_notification] Successfully inserted ${count || notificationEntries.length} notifications. Result:`, JSON.stringify(insertData))
+          }
+
+          // 2. Email Notifications (Placeholder for actual email service integration)
+          if (notificationType === 'email' || notificationType === 'both') {
+            console.log('Email delivery requested for', recipients.length, 'recipients. SMTP/Resend integration would happen here.')
+            // Note: In a production environment, you would use a service like Resend or SendGrid here.
+          }
+
+          return new Response(JSON.stringify({ success: true, count: recipients.length }), {
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
-        } catch (error) {
+        } catch (error: any) {
           console.error('Error sending notification:', error)
-          return new Response(JSON.stringify({ error: 'Failed to send notification' }), {
+          return new Response(JSON.stringify({ error: 'Failed to send notification', message: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })
@@ -755,6 +780,42 @@ serve(async (req) => {
         } catch (error: any) {
           console.error('Error updating admin status:', error)
           return new Response(JSON.stringify({ error: 'Failed to update admin status', message: error.message }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
+      case 'list_notifications':
+        try {
+          const { data: adminCheck, error: adminCheckError } = await supabaseClient
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (adminCheckError || !adminCheck) {
+            return new Response(JSON.stringify({ error: 'Admin access required' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const { data: notifications, error: fetchError } = await supabaseClient
+            .from('notifications')
+            .select('*')
+            .eq('type', 'system')
+            .order('created_at', { ascending: false })
+            .limit(100)
+
+          if (fetchError) throw fetchError
+
+          return new Response(JSON.stringify({ notifications }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error listing notifications:', error)
+          return new Response(JSON.stringify({ error: 'Failed to list notifications', message: error.message }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
           })

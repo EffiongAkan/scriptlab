@@ -3,6 +3,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SmartScriptInput } from './SmartScriptInput';
 import { ScriptElementType } from '@/hooks/useScriptContent';
 import { useScriptEditor } from '@/contexts/ScriptEditorContext';
+import { useLongPress } from '@/hooks/useLongPress';
 import { cn } from '@/lib/utils';
 
 interface SimpleScriptElementProps {
@@ -14,6 +15,8 @@ interface SimpleScriptElementProps {
   onEnterPress?: (currentId: string) => void;
   revision?: number;
   scriptElements: ScriptElementType[]; // Full list for autocomplete
+  sceneNumber?: number | null;
+  onLongPress?: (id: string, type: ScriptElementType['type'], content: string) => void;
 }
 
 export const SimpleScriptElement = ({
@@ -25,6 +28,8 @@ export const SimpleScriptElement = ({
   onEnterPress,
   revision,
   scriptElements,
+  sceneNumber,
+  onLongPress,
 }: SimpleScriptElementProps) => {
   const [localContent, setLocalContent] = useState(content);
   const { focusedElementId, setFocusedElementId } = useScriptEditor();
@@ -33,8 +38,6 @@ export const SimpleScriptElement = ({
 
   // Sync content from parent
   useEffect(() => {
-    // If not focused, always sync
-    // If focused, only sync if the revision changed (meaning a history action or external structure change occurred)
     if (!isFocused) {
       setLocalContent(content);
     }
@@ -46,11 +49,10 @@ export const SimpleScriptElement = ({
       console.log(`Force-syncing element ${id} due to history revision ${revision}`);
       setLocalContent(content);
     }
-  }, [revision]); // Specifically sync when revision changes, regardless of focus
+  }, [revision]);
 
   const handleContentChange = useCallback((newContent: string) => {
     setLocalContent(newContent);
-    // Auto-save on change (debounced in parent component)
     onChange(id, newContent);
   }, [id, onChange]);
 
@@ -64,6 +66,16 @@ export const SimpleScriptElement = ({
       onEnterPress(id);
     }
   }, [id, onEnterPress]);
+
+  // Long-press handler for mobile: opens the element action sheet
+  const longPressHandlers = useLongPress(
+    useCallback(() => {
+      if (onLongPress) {
+        onLongPress(id, type, localContent);
+      }
+    }, [id, type, localContent, onLongPress]),
+    { delay: 500 }
+  );
 
   const getElementStyle = () => {
     switch (type) {
@@ -105,7 +117,18 @@ export const SimpleScriptElement = ({
 
   return (
     <>
-      <div className={cn("py-1", getElementStyle())} dir="ltr">
+      <div
+        className={cn('py-1 relative', getElementStyle())}
+        dir="ltr"
+        id={`script-element-${id}`}
+        data-element-id={id}
+        {...longPressHandlers}
+      >
+        {sceneNumber && type === 'heading' && (
+          <div className="absolute -left-4 sm:-left-12 top-1 w-8 sm:w-10 text-right pr-2 text-gray-500 font-bold select-none cursor-default">
+            {sceneNumber}
+          </div>
+        )}
         <SmartScriptInput
           value={localContent}
           onChange={handleContentChange}
@@ -115,12 +138,17 @@ export const SimpleScriptElement = ({
           elementType={type}
           scriptElements={scriptElements}
           className={cn(
-            "w-full font-screenplay",
-            "focus:outline-none",
-            "empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400",
-            isFocused && "bg-blue-50/30"
+            'w-full font-screenplay',
+            'focus:outline-none',
+            'empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400',
+            isFocused && 'bg-blue-50/30'
           )}
         />
+        {sceneNumber && type === 'heading' && (
+          <div className="absolute right-0 sm:right-4 top-1 w-8 sm:w-10 text-left pl-2 text-gray-500 font-bold select-none cursor-default">
+            {sceneNumber}
+          </div>
+        )}
       </div>
     </>
   );

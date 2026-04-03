@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Input } from "@/components/ui/input";
 import { ScriptPaper, ScriptTitle } from "@/components/ui/script-paper";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -26,6 +26,7 @@ import { Quote, MessageSquare, ChevronRight, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScriptAISidebar } from "./ScriptAISidebar";
 import { FloatingSuggestions } from "./FloatingSuggestions";
+import { MobileElementActionSheet } from "./MobileElementActionSheet";
 import { cn } from "@/lib/utils";
 
 interface ScriptContentContainerProps {
@@ -125,8 +126,15 @@ export const ScriptContentContainer = ({
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
-  const [guestName, setGuestName] = useState(""); // Not used for authed users but sidebar needs props
+  const [guestName, setGuestName] = useState("");
   const [user, setUser] = useState<any>(null);
+
+  // Mobile action sheet (long-press on an element)
+  const [mobileActionSheet, setMobileActionSheet] = useState<{
+    elementId: string;
+    elementType: ScriptElementType['type'];
+    content: string;
+  } | null>(null);
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data }) => setUser(data.user));
@@ -158,18 +166,30 @@ export const ScriptContentContainer = ({
 
   const handleAIModify = () => {
     if (quoteSelection) {
-      console.log("[ScriptContentContainer] Modifying selection with AI:", quoteSelection.text);
-
       const event = new CustomEvent('modify-selection-ai', {
-        detail: {
-          text: quoteSelection.text,
-          elementId: quoteSelection.elementId
-        }
+        detail: { text: quoteSelection.text, elementId: quoteSelection.elementId }
       });
       document.dispatchEvent(event);
       clearSelection();
     }
   };
+
+  // Mobile action sheet handlers
+  const handleMobileLongPress = useCallback((elementId: string, elementType: ScriptElementType['type'], content: string) => {
+    setMobileActionSheet({ elementId, elementType, content });
+  }, []);
+
+  const handleMobileModifyWithAI = useCallback((elementId: string, content: string) => {
+    const event = new CustomEvent('modify-selection-ai', {
+      detail: { text: content, elementId }
+    });
+    document.dispatchEvent(event);
+  }, []);
+
+  const handleMobileQuoteAndComment = useCallback((elementId: string, content: string) => {
+    setNewComment(prev => `> "${content.slice(0, 120)}${content.length > 120 ? '…' : ''}"\n\n${prev}`);
+    setIsCommentsOpen(true);
+  }, []);
 
   // Listen for save shortcut events
   useEffect(() => {
@@ -195,7 +215,22 @@ export const ScriptContentContainer = ({
   }, [loadError, toast]);
 
   // Use the appropriate elements array based on our state
-  const scriptElements = useLocalElements ? localElements : realtimeElements;
+  const rawScriptElements = useLocalElements ? localElements : realtimeElements;
+
+  // Calculate global scene numbers and indices across the ENTIRE script before pagination
+  const scriptElements = useMemo(() => {
+    let sceneCount = 0;
+    return rawScriptElements.map((element, index) => {
+      if (element.type === 'heading') {
+        sceneCount++;
+      }
+      return {
+        ...element,
+        index,
+        sceneNumber: element.type === 'heading' ? sceneCount : undefined,
+      };
+    });
+  }, [rawScriptElements]);
 
   // === Pagination logic ===
   const totalPages = Math.ceil(scriptElements.length / PAGE_SIZE);
@@ -272,7 +307,7 @@ export const ScriptContentContainer = ({
       const sceneElements: ScriptElementType[] = [];
       let foundScene = false;
 
-      for (const element of scriptElements) {
+      for (const element of rawScriptElements) {
         if (element.id === sceneId) {
           foundScene = true;
         }
@@ -293,7 +328,7 @@ export const ScriptContentContainer = ({
       // Find the current index of the scene being moved
       let currentSceneIndex = -1;
       let sceneCount = 0;
-      for (const element of scriptElements) {
+      for (const element of rawScriptElements) {
         if (element.type === 'heading') {
           if (element.id === sceneId) {
             currentSceneIndex = sceneCount;
@@ -306,7 +341,7 @@ export const ScriptContentContainer = ({
       if (currentSceneIndex === -1) return;
 
       // Remove scene elements from their current position FIRST
-      const newElements = scriptElements.filter(
+      const newElements = rawScriptElements.filter(
         el => !sceneElements.find(se => se.id === el.id)
       );
 
@@ -375,7 +410,7 @@ export const ScriptContentContainer = ({
         variant: "destructive"
       });
     }
-  }, [scriptElements, toast, onContentChange, reorderElements]);
+  }, [rawScriptElements, toast, onContentChange, reorderElements, blockRealtimeSync]);
 
   // === Pagination controls ===
   const handlePrevPage = () => setCurrentPage((p) => Math.max(0, p - 1));
@@ -509,6 +544,7 @@ export const ScriptContentContainer = ({
                         revision={revision}
                         selectedElementIds={selectedElementIds}
                         onElementClick={handleElementClick}
+                        onLongPress={isMobileView ? handleMobileLongPress : undefined}
                       />
 
                       {totalPages > 1 && (
@@ -548,7 +584,18 @@ export const ScriptContentContainer = ({
         isSubmitting={isPostingComment}
       />
 
-      {/* Floating Quote Button */}
+      {/* Mobile long-press action sheet */}
+      <MobileElementActionSheet
+        isOpen={!!mobileActionSheet}
+        elementId={mobileActionSheet?.elementId ?? null}
+        elementType={mobileActionSheet?.elementType ?? null}
+        elementContent={mobileActionSheet?.content ?? ''}
+        onClose={() => setMobileActionSheet(null)}
+        onModifyWithAI={handleMobileModifyWithAI}
+        onQuoteAndComment={handleMobileQuoteAndComment}
+      />
+
+      {/* Floating Quote Button (desktop text-selection) */}
       {quoteSelection && (
         <div
           className="fixed z-50 animate-in zoom-in duration-200"

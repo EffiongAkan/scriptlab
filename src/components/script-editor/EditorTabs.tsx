@@ -4,8 +4,9 @@ import { ScriptContentContainer } from "./ScriptContentContainer";
 import { ScriptAnalysisTabContent } from "./ScriptAnalysisTabContent";
 import { CollaborationPanel } from "./CollaborationPanel";
 import { ShareScriptModal } from "./ShareScriptModal";
-import { FileText, BarChart3, Users, Share2 } from "lucide-react";
+import { FileText, BarChart3, Users, Share2, LayoutList } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScriptBreakdownPanel } from "./analysis/ScriptBreakdownPanel";
 
 interface EditorTabsProps {
   scriptId: string;
@@ -48,7 +49,7 @@ export const EditorTabs = ({
     <Tabs defaultValue="write" onValueChange={onTabChange} className="w-full h-full flex flex-col">
       {/* Mobile: Compress TabsList, Desktop: Normal TabsList */}
       <div className="overflow-x-auto bg-[#1E1E1E] md:bg-transparent border-b border-gray-800 md:border-none">
-        <TabsList className="grid w-full min-w-fit grid-cols-4 h-auto p-0 md:p-1 bg-transparent md:bg-muted">
+        <TabsList className="grid w-full min-w-fit grid-cols-5 h-auto p-0 md:p-1 bg-transparent md:bg-muted">
           <TabsTrigger value="write" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
             <FileText className="h-3 w-3 md:h-4 md:w-4" />
             <span className="inline-block md:inline">Write</span>
@@ -56,6 +57,10 @@ export const EditorTabs = ({
           <TabsTrigger value="analysis" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
             <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
             <span className="inline-block md:inline">Analyze</span>
+          </TabsTrigger>
+          <TabsTrigger value="breakdown" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
+            <LayoutList className="h-3 w-3 md:h-4 md:w-4" />
+            <span className="inline-block md:inline">Breakdown</span>
           </TabsTrigger>
 
           <TabsTrigger value="collaboration" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
@@ -91,6 +96,13 @@ export const EditorTabs = ({
           language={language}
           synopsis={synopsis}
           industry={industry}
+        />
+      </TabsContent>
+
+      <TabsContent value="breakdown" className="mt-0 md:mt-4 flex-1 h-full overflow-y-auto min-h-0">
+        <ScriptBreakdownPanel
+          elements={elements}
+          title={title}
         />
       </TabsContent>
 

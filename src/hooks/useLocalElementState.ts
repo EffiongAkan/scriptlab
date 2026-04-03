@@ -458,7 +458,7 @@ export const useLocalElementState = (
         clearInterval(backupIntervalRef.current);
       }
 
-      // Set up periodic backup (every 60 seconds) - Dexie is faster but we still want it staggered
+      // Set up periodic backup (every 15 seconds) - Frequent enough to capture offline edits reliably
       backupIntervalRef.current = setInterval(async () => {
         try {
           const timestamp = new Date().toISOString();
@@ -479,7 +479,7 @@ export const useLocalElementState = (
         } catch (e) {
           console.error('Failed to create Dexie backup:', e);
         }
-      }, 60000);
+      }, 15000);
     }
 
     return () => {

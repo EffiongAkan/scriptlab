@@ -3,6 +3,7 @@
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { YoutubeTranscript } from 'npm:youtube-transcript'
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") || "";
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") || "";
@@ -29,7 +30,7 @@ serve(async (req) => {
         const { data: { user }, error: userError } = await supabaseClient.auth.getUser();
         if (userError || !user) throw new Error(`Auth failed: ${userError?.message}`);
 
-        const { videoUrl, forceRefresh } = await req.json()
+        const { videoUrl, forceRefresh, focusFilter } = await req.json()
 
         if (!videoUrl) {
             return new Response(
@@ -86,8 +87,8 @@ serve(async (req) => {
         });
 
         // Check cache first - Normalize URL in cache key
-        const cacheVersion = "v6"; // v6: Added synopsis, logline, keyCharacters
-        const cacheKey = `video_analysis:${cacheVersion}:${normalizedUrl}`;
+        const cacheVersion = "v7"; // v7: Added threeActBreakdown, focusFilter and transcript
+        const cacheKey = `video_analysis:${cacheVersion}:${normalizedUrl}:${focusFilter || 'none'}`;
 
         if (!forceRefresh) {
             const { data: cachedData } = await supabaseAdmin
@@ -143,6 +144,12 @@ OUTPUT STRUCTURE:
       "description": "string"
     }
   ],
+  "threeActBreakdown": {
+    "setup": "string",
+    "incitingIncident": "string",
+    "confrontation": "string",
+    "resolution": "string"
+  },
   "characterTypes": ["string"],
   "dialogueStyle": "string",
   "visualElements": ["string"],
@@ -167,12 +174,15 @@ PLATFORM: ${videoInfo.platform}
 VIDEO TAGS: ${metadata.tags?.length > 0 ? metadata.tags.join(', ') : 'No tags available'}
 VIDEO CATEGORY: ${metadata.category || 'Unknown'}
 VIDEO DESCRIPTION: ${metadata.description || 'No detailed description available. Analyze based on title and tags only. DO NOT guess from memory.'}
+${metadata.transcript ? `\nVIDEO TRANSCRIPT (SPOKEN DIALOGUE):\n${metadata.transcript.substring(0, 8000)}\n` : ''}
+${focusFilter ? `\nUSER ANALYTICAL FOCUS: Please heavily emphasize the following aspect in your analysis: ${focusFilter}\n` : ''}
 
 CRITICAL: Your analysis MUST be about the video described above. Do NOT substitute details from a different video.
 REQUIRED FIELDS:
 - logline: A one-sentence summary of the video's core conflict or premise.
 - synopsis: A brief paragraph (3-4 sentences) summarizing the full narrative arc.
 - keyCharacters: A list of the specific characters identified in the video (if any), with their names (or functional names like "The Host", "The Protagonist"), roles, and brief descriptions.
+- threeActBreakdown: A highly specific breakdown defining Act 1 (Setup), the Inciting Incident, Act 2 (Confrontation), and Act 3 (Resolution).
 
 Return ONLY the JSON object.`;
 
@@ -286,7 +296,7 @@ Return ONLY the JSON object.`;
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         )
 
-    } catch (error) {
+    } catch (error: any) {
         console.error('[VideoAnalysis] Error:', error);
         console.error('[VideoAnalysis] Error stack:', error.stack);
         return new Response(
@@ -361,6 +371,22 @@ async function fetchVideoMetadata(url: string, info: { platform: string; videoId
         let metadata = { ...defaultMetadata };
 
         if (info.platform === 'youtube' && info.videoId) {
+            // === NEW: TRANSCRIPT EXTRACTION ===
+            try {
+                console.log('[VideoAnalysis] Attempting to fetch transcript for:', info.videoId);
+                // @ts-ignore Deno NPM import
+                const transcriptData = await YoutubeTranscript.fetchTranscript(info.videoId);
+                if (transcriptData && transcriptData.length > 0) {
+                    // @ts-ignore Element type
+                    const fullTranscript = transcriptData.map(t => t.text).join(' ');
+                    // @ts-ignore Dynamic property
+                    metadata.transcript = fullTranscript;
+                    console.log('[VideoAnalysis] Successfully fetched transcript, text length:', fullTranscript.length);
+                }
+            } catch (transcriptErr: any) {
+                console.warn('[VideoAnalysis] Could not fetch transcript (may not have captions):', transcriptErr.message);
+            }
+
             // === STRATEGY 1: Invidious API (free, no key, returns FULL description + tags) ===
             const invidiousInstances = [
                 'https://vid.puffyan.us',
@@ -390,7 +416,7 @@ async function fetchVideoMetadata(url: string, info: { platform: string; videoId
                         invidiousSuccess = true;
                         break;
                     }
-                } catch (invErr) {
+                } catch (invErr: any) {
                     console.warn(`[VideoAnalysis] Invidious instance ${instance} failed:`, invErr.message);
                 }
             }
@@ -441,7 +467,7 @@ async function fetchVideoMetadata(url: string, info: { platform: string; videoId
                             }
                         }
                     }
-                } catch (scrapeErr) {
+                } catch (scrapeErr: any) {
                     console.warn('[VideoAnalysis] Page scrape failed:', scrapeErr.message);
                 }
             }

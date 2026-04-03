@@ -125,6 +125,7 @@ export class ScriptExportService {
     const validElements = elements.filter(el => el && el.content && el.content.trim() !== '');
     const fontSize = 12; // Current font size
     const lineHeight = fontSize * 0.0166666667; // 12pt font, 12pt leading (1/6 inch)
+    let sceneCount = 0;
 
     validElements.forEach(element => {
       // Check for new page
@@ -142,6 +143,12 @@ export class ScriptExportService {
           pdf.setFont("courier", "bold");
           xPosition = 1;
           yPosition += 0.3; // Extra space before heading
+          sceneCount++;
+          // Scene Numbers in Margins
+          pdf.setFontSize(10);
+          pdf.text(sceneCount.toString(), 0.7, yPosition);
+          pdf.text(sceneCount.toString(), 7.8, yPosition);
+          pdf.setFontSize(12);
           break;
         case 'action':
           pdf.setFont("courier", "normal");
@@ -211,6 +218,7 @@ export class ScriptExportService {
     }
 
     const validElements = elements.filter(el => el && el.content && el.content.trim() !== '');
+    let sceneCount = 0;
 
     validElements.forEach(element => {
       const content = element.content.trim();
@@ -218,7 +226,8 @@ export class ScriptExportService {
 
       switch (element.type) {
         case 'heading':
-          fountain += `\n.${content.toUpperCase()}\n\n`;
+          sceneCount++;
+          fountain += `\n.${content.toUpperCase()} #${sceneCount}#\n\n`;
           break;
         case 'character':
           fountain += `@${content.toUpperCase()}\n`;
@@ -345,13 +354,15 @@ export class ScriptExportService {
       content += `Written by\n\n[Author Name]\n\n\n`;
     }
 
+    let sceneCount = 0;
     elements.forEach((element) => {
       const elementContent = element.content.trim();
       if (!elementContent) return;
 
       switch (element.type) {
         case 'heading':
-          content += `\n\n${elementContent.toUpperCase()}\n\n`;
+          sceneCount++;
+          content += `\n\n${sceneCount}. ${elementContent.toUpperCase()}\n\n`;
           break;
         case 'character':
           content += `\n\n                    ${elementContent.toUpperCase()}\n`;

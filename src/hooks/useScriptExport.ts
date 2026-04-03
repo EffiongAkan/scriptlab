@@ -188,6 +188,7 @@ export const useScriptExport = () => {
       let yPosition = 1;
       const pageHeight = 10.5; // Letter size minus margins
       const lineHeight = 0.2;
+      let sceneCount = 0;
 
       validElements.forEach(element => {
         if (yPosition > pageHeight) {
@@ -206,6 +207,12 @@ export const useScriptExport = () => {
             doc.setFont("courier", "bold");
             xPosition = 1;
             yPosition += 0.3;
+            sceneCount++;
+            // Draw scene numbers on both sides
+            doc.setFontSize(10);
+            doc.text(sceneCount.toString(), 0.7, yPosition);
+            doc.text(sceneCount.toString(), 7.8, yPosition);
+            doc.setFontSize(fontSize);
             break;
           case 'action':
             doc.setFont("courier", "normal");

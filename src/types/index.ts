@@ -259,6 +259,13 @@ export interface VideoAnalysis {
     role: string;
     description: string;
   }>;
+  threeActBreakdown?: {
+    setup: string;
+    incitingIncident: string;
+    confrontation: string;
+    resolution: string;
+  };
+  focusFilter?: string;
 }
 
 export interface VideoAnalysisRequest {

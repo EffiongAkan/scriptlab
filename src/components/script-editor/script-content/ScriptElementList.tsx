@@ -29,6 +29,7 @@ interface ScriptElementListProps {
   revision?: number;
   selectedElementIds?: Set<string>;
   onElementClick?: (id: string, event: React.MouseEvent) => void;
+  onLongPress?: (id: string, type: ScriptElementType['type'], content: string) => void;
 }
 
 export const ScriptElementList = ({
@@ -42,7 +43,8 @@ export const ScriptElementList = ({
   changeElementType,
   revision,
   selectedElementIds,
-  onElementClick
+  onElementClick,
+  onLongPress,
 }: ScriptElementListProps) => {
   const previousElementsLengthRef = useRef(0);
   const newElementRef = useRef<string | null>(null);
@@ -259,35 +261,20 @@ export const ScriptElementList = ({
     [onContentChange]
   );
 
-  // Scene tracking for better organization
-  const sceneElements = useMemo(() => {
-    let sceneCount = 0;
-    return scriptElements.map((element, index) => {
-      if (element.type === 'heading') {
-        sceneCount++;
-      }
-      return {
-        ...element,
-        sceneNumber: element.type === 'heading' ? sceneCount : null,
-        index
-      };
-    });
-  }, [scriptElements]);
-
   return (
     <>
       {/* Scene information header */}
-      {sceneElements.length > 0 && (
+      {scriptElements.length > 0 && (
         <div className="text-center mb-8 font-mono">
           <div className="uppercase font-bold text-sm">SCREENPLAY</div>
           <div className="mt-1 text-xs text-gray-600">
-            {sceneElements.filter(el => el.type === 'heading').length} scenes • {sceneElements.length} elements
+            {scriptElements.filter(el => el.type === 'heading').length} scenes • {scriptElements.length} elements
           </div>
         </div>
       )}
 
       {/* Render optimized script elements */}
-      {sceneElements.map((element) => {
+      {scriptElements.map((element: any) => {
         const isNewElement = newElementRef.current === element.id;
 
         const typeConfig: Record<ScriptElementType['type'], { label: string; icon: React.ReactNode; description: string }> = {
@@ -324,9 +311,6 @@ export const ScriptElementList = ({
                 {/* Enhanced line numbers with scene indicators */}
                 <div className="hidden sm:flex absolute -left-16 text-gray-400 text-xs select-none pt-1 flex-col items-end">
                   <span>{element.index + 1}</span>
-                  {element.sceneNumber && (
-                    <span className="text-blue-500 font-bold text-[10px]">S{element.sceneNumber}</span>
-                  )}
                 </div>
 
                 {/* Visual indicator for element types */}
@@ -351,6 +335,8 @@ export const ScriptElementList = ({
                   onFocus={() => onElementFocus(element.id)}
                   onEnterPress={handleEnterPress}
                   scriptElements={scriptElements}
+                  sceneNumber={element.sceneNumber}
+                  onLongPress={onLongPress}
                 />
               </div>
             </ContextMenuTrigger>

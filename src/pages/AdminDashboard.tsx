@@ -27,6 +27,7 @@ import {
   Play
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
@@ -168,26 +169,81 @@ export default function AdminDashboard() {
     fetchSubscriptionPlans();
   }, []);
 
-  const [notificationTemplates] = useState([
-    {
-      id: '1',
-      name: 'Welcome Message',
-      subject: 'Welcome to ScriptLab!',
-      message: 'Welcome to our platform! We\'re excited to have you on board.',
-      type: 'email' as const
-    }
-  ]);
+  const [notificationTemplates, setNotificationTemplates] = useState<any[]>([]);
+  const [notificationHistory, setNotificationHistory] = useState<any[]>([]);
 
-  const [notificationHistory] = useState([
-    {
-      id: '1',
-      type: 'bulk' as const,
-      subject: 'System Maintenance Notice',
-      recipients: 156,
-      sent_at: '2024-06-27T10:00:00Z',
-      status: 'sent' as const
+  const fetchNotificationData = async () => {
+    try {
+      const { data: templates, error: templatesError } = await supabase
+        .from('system_settings')
+        .select('*')
+        .eq('key', 'notification_templates')
+        .maybeSingle();
+
+      if (templates?.value) {
+        setNotificationTemplates(templates.value as any[]);
+      }
+      console.log('Fetching notification history directly from DB (RLS)...');
+      const { data: notifications, error } = await supabase
+        .from('notifications' as any)
+        .select('*')
+        .eq('type', 'system')
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (error) throw error;
+      
+      const history = notifications || [];
+      
+      // Group by send event (grouping by time window and subject)
+      const grouped = (history as any[]).reduce((acc: any[], current) => {
+        const currentTimestamp = current.created_at ? new Date(current.created_at).getTime() : Date.now();
+        
+        // Find existing group with same subject sent within 5 seconds
+        const existing = acc.find(item => 
+          item.subject === current.title && 
+          Math.abs(new Date(item.sent_at).getTime() - currentTimestamp) < 5000
+        );
+
+        if (existing) {
+          existing.recipients = (existing.recipients || 1) + 1;
+          existing.type = 'bulk';
+        } else {
+          acc.push({
+            id: current.id,
+            subject: current.title,
+            message: current.message,
+            sent_at: current.created_at,
+            status: 'sent',
+            recipients: 1,
+            type: 'individual'
+          });
+        }
+        return acc;
+      }, []);
+
+      setNotificationHistory(grouped);
+    } catch (error) {
+      console.error('Error fetching notification data:', error);
     }
-  ]);
+  };
+
+  const handleSaveTemplate = async (template: any) => {
+    try {
+      const newTemplates = [...notificationTemplates, { ...template, id: crypto.randomUUID() }];
+      const { error } = await supabase
+        .from('system_settings')
+        .update({ value: newTemplates })
+        .eq('key', 'notification_templates');
+
+      if (error) throw error;
+      setNotificationTemplates(newTemplates);
+      toast({ title: "Success", description: "Template saved" });
+    } catch (error: any) {
+      console.error('Error saving template:', error);
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
 
   const [adminRoles, setAdminRoles] = useState<any[]>([]);
   const [adminUsers, setAdminUsers] = useState<any[]>([]);
@@ -387,6 +443,7 @@ export default function AdminDashboard() {
     fetchAdminUsers();
     fetchSystemStats();
     fetchSystemSettings();
+    fetchNotificationData();
     checkSystemHealth();
 
     // Set up real-time subscriptions for auto-refresh
@@ -397,6 +454,7 @@ export default function AdminDashboard() {
       timeoutId = setTimeout(() => {
         fetchUsers();
         fetchSystemStats();
+        fetchNotificationData();
       }, 1000); // Debounce to prevent rapid-fire requests
     };
 
@@ -482,15 +540,38 @@ export default function AdminDashboard() {
 
   const handleSendNotification = async (data: any) => {
     try {
-      const response = await supabase.functions.invoke('admin-operations', {
-        body: {
-          operation: 'send_notification',
-          data
-        }
-      });
+      const { recipients, subject, message, notificationType, actionUrl } = data;
+      
+      // 1. In-App Notifications: Insert directly to bypass potential Edge Function latency/issues
+      if (notificationType === 'in-app' || notificationType === 'both') {
+        const notificationEntries = recipients.map((recipientId: string) => ({
+          user_id: recipientId,
+          title: subject,
+          message: message,
+          type: 'system', // CRITICAL: Must be 'system' for history and bell visibility
+          action_url: actionUrl || null,
+          read: false
+        }));
 
-      if (response.error) {
-        throw response.error;
+        const { error: insertError } = await supabase
+          .from('notifications' as any)
+          .insert(notificationEntries);
+
+        if (insertError) throw insertError;
+      }
+
+      // 2. Email Notifications: Still needs Edge Function
+      if (notificationType === 'email' || notificationType === 'both') {
+        const response = await supabase.functions.invoke('admin-operations', {
+          body: {
+            operation: 'send_notification',
+            data: { ...data, notificationType: 'email' } // Force only email in edge function
+          }
+        });
+
+        if (response.error) {
+          throw response.error;
+        }
       }
 
       toast({
@@ -913,7 +994,7 @@ export default function AdminDashboard() {
                 templates={notificationTemplates}
                 history={notificationHistory}
                 onSendNotification={handleSendNotification}
-                onSaveTemplate={(template) => console.log('Save template:', template)}
+                onSaveTemplate={handleSaveTemplate}
               />
             </TabsContent>
           )}
@@ -999,7 +1080,35 @@ export default function AdminDashboard() {
                     toast({ title: 'Error', description: error.message, variant: 'destructive' });
                   }
                 }}
-                onToggleAdminStatus={(adminId, isActive) => console.log('Toggle admin status:', adminId, isActive)}
+                onToggleAdminStatus={async (adminId, isActive) => {
+                  try {
+                    const { data, error } = await supabase.functions.invoke('admin-operations', {
+                      body: { 
+                        operation: 'update_admin_status', 
+                        data: { adminId, isActive } 
+                      }
+                    });
+
+                    if (error) throw error;
+
+                    setAdminUsers(prev => prev.map(admin => 
+                      admin.id === adminId ? { ...admin, is_active: isActive } : admin
+                    ));
+
+                    toast({
+                      title: "Success",
+                      description: `Admin status ${isActive ? 'activated' : 'deactivated'} successfully`,
+                    });
+                  } catch (error: any) {
+                    console.error('Error updating admin status:', error);
+                    toast({
+                      title: "Error",
+                      description: error.message || "Failed to update admin status",
+                      variant: "destructive"
+                    });
+                  }
+                }}
+
               />
             </TabsContent>
           )}
@@ -1035,6 +1144,95 @@ export default function AdminDashboard() {
                       <div className="text-sm text-muted-foreground">Monthly Revenue</div>
                     </div>
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* POSTHOG EMBED SECTION */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5" />
+                    Detailed Analytics (PostHog)
+                  </CardTitle>
+                  <CardDescription>
+                    Live product analytics, feature usage, and user behavior powered by PostHog
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {!systemSettings.posthog_dashboard_url ? (
+                    <div className="bg-muted/30 border border-muted p-8 rounded-lg text-center space-y-4">
+                      <div className="inline-flex items-center justify-center p-4 bg-muted rounded-full">
+                        <BarChart3 className="h-8 w-8 text-muted-foreground" />
+                      </div>
+                      <div>
+                        <h4 className="text-lg font-medium">PostHog Dashboard Not Configured</h4>
+                        <p className="text-sm text-muted-foreground mt-2 max-w-md mx-auto">
+                          Paste your PostHog Shared Dashboard iframe URL here to monitor your product metrics directly from this admin panel. You can generate this from your PostHog project by clicking "Share" on any dashboard.
+                        </p>
+                      </div>
+                      <div className="flex max-w-xl mx-auto items-center gap-3 pt-4">
+                        <Input 
+                          id="posthog-url-input"
+                          placeholder="https://us.i.posthog.com/embedded/..."
+                          className="flex-1"
+                        />
+                        <Button 
+                          onClick={() => {
+                            const input = document.getElementById('posthog-url-input') as HTMLInputElement;
+                            if (input?.value) {
+                              const valueToSave = input.value.trim();
+                              // Simple extraction if they paste the full iframe snippet
+                              const match = valueToSave.match(/src="([^"]+)"/);
+                              const finalUrl = match ? match[1] : valueToSave;
+                              
+                              if (finalUrl.includes('posthog.com')) {
+                                handleUpdateSetting('posthog_dashboard_url', finalUrl);
+                              } else {
+                                toast({
+                                  title: "Invalid URL",
+                                  description: "Please enter a valid PostHog URL",
+                                  variant: "destructive"
+                                });
+                              }
+                            }
+                          }}
+                        >
+                          Save URL
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex justify-end">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              // By setting it to null (or empty), the UI will instantly flip back.
+                              await handleUpdateSetting('posthog_dashboard_url', '');
+                              toast({ title: "Configuration removed", description: "You can now map a new dashboard URL." });
+                            } catch (error: any) {
+                              toast({ title: "Failed to reset", description: error.message, variant: "destructive" });
+                            }
+                          }}
+                        >
+                          <Settings className="w-4 h-4 mr-2" />
+                          Reconfigure URL
+                        </Button>
+                      </div>
+                      <div className="w-full bg-background rounded-lg border overflow-hidden min-h-[650px] relative">
+                         <iframe 
+                           src={systemSettings.posthog_dashboard_url} 
+                           allowFullScreen 
+                           width="100%" 
+                           height="100%" 
+                           frameBorder="0"
+                           className="absolute inset-0 w-full h-full min-h-[650px]"
+                         ></iframe>
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </TabsContent>

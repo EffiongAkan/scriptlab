@@ -13,6 +13,7 @@ import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAICredits } from "@/hooks/useAICredits";
 import { cn } from "@/lib/utils";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 const menuItems = [
   { title: "Home", path: "/", icon: Home },
@@ -209,6 +210,9 @@ export const AppTopbar: React.FC = () => {
             <span className="font-semibold">{credits ?? 0}</span>
           </Button>
         </Link>
+
+        {/* Notifications */}
+        <NotificationBell />
 
         {/* Save Button */}
         <Button

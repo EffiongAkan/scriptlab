@@ -482,7 +482,18 @@ export function EditorContent() {
                 });
               }
             }}
-            scriptContext={`Title: ${title}\nContent: ${historyElements?.map(e => e.content).join('\n') || ''}`}
+            scriptContext={(() => {
+              if (aiInitialSelection?.elementId && historyElements) {
+                const idx = historyElements.findIndex(e => e.id === aiInitialSelection.elementId);
+                if (idx !== -1) {
+                  const start = Math.max(0, idx - 15);
+                  const end = Math.min(historyElements.length, idx + 15);
+                  return `Title: ${title}\nContext Around Selection:\n${historyElements.slice(start, end).map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
+                }
+              }
+              const recent = historyElements?.slice(-30) || [];
+              return `Title: ${title}\nRecent Script Content:\n${recent.map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
+            })()}
             scriptData={scriptData || undefined}
             characters={characters}
             initialSelection={aiInitialSelection || undefined}

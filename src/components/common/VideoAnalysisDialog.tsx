@@ -4,6 +4,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, ArrowLeft, Link as LinkIcon, CheckCircle, Video, Sparkles } from "lucide-react";
 import { VideoAnalysis } from "@/types";
@@ -17,8 +19,45 @@ interface VideoAnalysisDialogProps {
 export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack, onProceed }) => {
     const { toast } = useToast();
     const [videoUrl, setVideoUrl] = useState("");
+    const [focusFilter, setFocusFilter] = useState("");
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysis, setAnalysis] = useState<VideoAnalysis | null>(null);
+    const [activeTab, setActiveTab] = useState("new");
+    const [recentAnalyses, setRecentAnalyses] = useState<any[]>([]);
+    const [isLoadingRecent, setIsLoadingRecent] = useState(false);
+
+    const fetchRecentAnalyses = async () => {
+        setIsLoadingRecent(true);
+        try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (!user) return;
+            const { data, error } = await supabase
+                .from('ai_cache' as any)
+                .select('cache_key, response_content, created_at')
+                .ilike('cache_key', 'video_analysis:%')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(10);
+                
+            if (data && !error) {
+                const parsed = (data as any[]).map(d => {
+                    try { return { ...JSON.parse(d.response_content), cache_key: d.cache_key }; }
+                    catch { return null; }
+                }).filter(Boolean);
+                setRecentAnalyses(parsed);
+            }
+        } catch (err) {
+            console.error("Failed to fetch recent analyses", err);
+        } finally {
+            setIsLoadingRecent(false);
+        }
+    };
+
+    React.useEffect(() => {
+        if (activeTab === "recent" && recentAnalyses.length === 0) {
+            fetchRecentAnalyses();
+        }
+    }, [activeTab]);
 
     const isValidUrl = (url: string): boolean => {
         try {
@@ -72,7 +111,7 @@ export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack
 
             console.log("[VideoAnalysis] Invoking edge function 'analyze-video'...");
             const { data, error } = await supabase.functions.invoke('analyze-video', {
-                body: { videoUrl: trimmedUrl, forceRefresh }
+                body: { videoUrl: trimmedUrl, forceRefresh, focusFilter: focusFilter === 'none' ? undefined : focusFilter }
             });
 
             console.log("[VideoAnalysis] Function response received:", { data, error });
@@ -287,17 +326,45 @@ export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack
                     </Card>
                 )}
 
-                {/* Story Structure */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-sm">Story Structure</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground whitespace-pre-line">
-                            {analysis.storyStructure}
-                        </p>
-                    </CardContent>
-                </Card>
+                {/* 3-Act Structure (V2) or Fallback to V1 Story Structure */}
+                {analysis.threeActBreakdown ? (
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">Three-Act Structure</CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <div className="border-l-2 border-primary/20 pl-4 space-y-4">
+                                <div>
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Act I: Setup</h4>
+                                    <p className="text-sm">{analysis.threeActBreakdown.setup}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-semibold text-orange-500 uppercase tracking-wider mb-1">Inciting Incident</h4>
+                                    <p className="text-sm">{analysis.threeActBreakdown.incitingIncident}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Act II: Confrontation</h4>
+                                    <p className="text-sm">{analysis.threeActBreakdown.confrontation}</p>
+                                </div>
+                                <div>
+                                    <h4 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">Act III: Resolution</h4>
+                                    <p className="text-sm">{analysis.threeActBreakdown.resolution}</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                ) : analysis.storyStructure && (
+                    <Card>
+                        <CardHeader className="pb-3">
+                            <CardTitle className="text-sm">Story Structure</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <p className="text-sm text-muted-foreground whitespace-pre-line">
+                                {analysis.storyStructure}
+                            </p>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Character Types */}
                 {analysis.characterTypes.length > 0 && (
@@ -330,7 +397,7 @@ export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack
         );
     }
 
-    // Show URL input
+    // Show URL input & Recent Analyses
     return (
         <div className="space-y-6 py-4">
             <div>
@@ -340,63 +407,125 @@ export const VideoAnalysisDialog: React.FC<VideoAnalysisDialogProps> = ({ onBack
                 </p>
             </div>
 
-            <div className="space-y-4">
-                <div>
-                    <Label htmlFor="videoUrl">Video URL</Label>
-                    <div className="flex gap-2 mt-2">
-                        <div className="relative flex-1">
-                            <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                id="videoUrl"
-                                value={videoUrl}
-                                onChange={(e) => setVideoUrl(e.target.value)}
-                                placeholder="https://youtube.com/watch?v=..."
-                                className="pl-9"
-                                disabled={isAnalyzing}
-                            />
-                        </div>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-2">
-                        Supported: YouTube, Vimeo, direct video links (.mp4, .webm)
-                    </p>
-                </div>
+            <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList className="grid w-full grid-cols-2 mb-4">
+                    <TabsTrigger value="new">New Analysis</TabsTrigger>
+                    <TabsTrigger value="recent">Recent Analyses</TabsTrigger>
+                </TabsList>
 
-                {isAnalyzing && (
-                    <Card className="bg-muted/50">
-                        <CardContent className="pt-6">
-                            <div className="flex flex-col items-center text-center space-y-3">
-                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                                <div>
-                                    <h4 className="font-semibold">Analyzing Video...</h4>
-                                    <p className="text-sm text-muted-foreground">
-                                        Extracting story elements, themes, and style
-                                    </p>
-                                </div>
+                <TabsContent value="new" className="space-y-4">
+                    <div>
+                        <Label htmlFor="videoUrl">Video URL</Label>
+                        <div className="flex gap-2 mt-2">
+                            <div className="relative flex-1">
+                                <LinkIcon className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    id="videoUrl"
+                                    value={videoUrl}
+                                    onChange={(e) => setVideoUrl(e.target.value)}
+                                    placeholder="https://youtube.com/watch?v=..."
+                                    className="pl-9"
+                                    disabled={isAnalyzing}
+                                />
                             </div>
-                        </CardContent>
-                    </Card>
-                )}
-            </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-2">
+                            Supported: YouTube, Vimeo, direct video links (.mp4, .webm)
+                        </p>
+                    </div>
 
-            <div className="flex justify-between pt-4">
-                <Button variant="outline" onClick={onBack} disabled={isAnalyzing}>
-                    <ArrowLeft className="mr-2 h-4 w-4" />
-                    Back
-                </Button>
-                <Button onClick={() => handleAnalyze()} disabled={isAnalyzing || !videoUrl.trim()}>
-                    {isAnalyzing ? (
-                        <>
-                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            Analyzing...
-                        </>
-                    ) : (
-                        <>
-                            <Sparkles className="mr-2 h-4 w-4" />
-                            Analyze Video
-                        </>
+                    <div>
+                        <Label htmlFor="focusFilter">Analytical Focus (Optional)</Label>
+                        <Select value={focusFilter} onValueChange={setFocusFilter} disabled={isAnalyzing}>
+                            <SelectTrigger className="mt-2">
+                                <SelectValue placeholder="Balanced Analysis (Default)" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="none">Balanced Analysis (Default)</SelectItem>
+                                <SelectItem value="Plot twists, pacing, and narrative structure">Plot & Narrative Flow</SelectItem>
+                                <SelectItem value="Character development, arcs, and dialogue patterns">Character & Dialogue</SelectItem>
+                                <SelectItem value="Visual storytelling, tone, and environment">Cinematic & Visual Elements</SelectItem>
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    {isAnalyzing && (
+                        <Card className="bg-muted/50">
+                            <CardContent className="pt-6">
+                                <div className="flex flex-col items-center text-center space-y-3">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                    <div>
+                                        <h4 className="font-semibold">Analyzing Video...</h4>
+                                        <p className="text-sm text-muted-foreground">
+                                            Extracting transcripts, story elements, and themes
+                                        </p>
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
                     )}
-                </Button>
-            </div>
+
+                    <div className="flex justify-between pt-4">
+                        <Button variant="outline" onClick={onBack} disabled={isAnalyzing}>
+                            <ArrowLeft className="mr-2 h-4 w-4" />
+                            Back
+                        </Button>
+                        <Button onClick={() => handleAnalyze()} disabled={isAnalyzing || !videoUrl.trim()}>
+                            {isAnalyzing ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Analyzing...
+                                </>
+                            ) : (
+                                <>
+                                    <Sparkles className="mr-2 h-4 w-4" />
+                                    Analyze Video
+                                </>
+                            )}
+                        </Button>
+                    </div>
+                </TabsContent>
+
+                <TabsContent value="recent" className="space-y-4">
+                    {isLoadingRecent ? (
+                        <div className="flex py-10 justify-center">
+                            <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : recentAnalyses.length === 0 ? (
+                        <div className="text-center py-10 border rounded-lg bg-muted/20">
+                            <p className="text-sm text-muted-foreground">No recent analyses found.</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 gap-3 max-h-[50vh] overflow-y-auto pr-2">
+                            {recentAnalyses.map((rec, i) => (
+                                <Card key={i} className="cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setAnalysis(rec as VideoAnalysis)}>
+                                    <div className="flex p-3 gap-3">
+                                        {rec.thumbnailUrl ? (
+                                            <div className="w-20 shrink-0">
+                                                <img src={rec.thumbnailUrl} alt={rec.videoTitle} className="w-full aspect-video object-cover rounded" />
+                                            </div>
+                                        ) : (
+                                            <div className="w-20 shrink-0 aspect-video bg-muted rounded flex items-center justify-center">
+                                                <Video className="h-6 w-6 text-muted-foreground/50" />
+                                            </div>
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                            <h4 className="font-medium text-sm line-clamp-1">{rec.videoTitle || "Analyzed Video"}</h4>
+                                            <p className="text-xs text-muted-foreground line-clamp-1 mt-1">{rec.logline || rec.sourceUrl}</p>
+                                        </div>
+                                    </div>
+                                </Card>
+                            ))}
+                            <div className="flex justify-start pt-2">
+                                <Button variant="outline" onClick={onBack}>
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Back
+                                </Button>
+                            </div>
+                        </div>
+                    )}
+                </TabsContent>
+            </Tabs>
         </div>
     );
 };
