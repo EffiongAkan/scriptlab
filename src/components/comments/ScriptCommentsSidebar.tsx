@@ -50,7 +50,7 @@ export const ScriptCommentsSidebar = ({
 }: ScriptCommentsSidebarProps) => {
     return (
         <Sheet open={isOpen} onOpenChange={onOpenChange}>
-            <SheetContent className="w-[400px] sm:w-[540px] flex flex-col bg-slate-950 border-l border-slate-800 text-slate-200" side="right">
+            <SheetContent className="w-full sm:max-w-[400px] flex flex-col bg-slate-950 border-l border-slate-800 text-slate-200" side="right">
                 <SheetHeader className="border-b border-slate-800 pb-4 bg-slate-950 -mx-6 px-6 pt-6">
                     <SheetTitle className="flex items-center gap-2 text-white">
                         <MessageSquare className="h-5 w-5 text-indigo-400" />

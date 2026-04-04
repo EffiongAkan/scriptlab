@@ -10,6 +10,13 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
   const channelRef = useRef<any>(null);
   const userProfileRef = useRef<{ username: string; userId: string } | null>(null);
   const presenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  /** Timeout that clears the user's own editingElementId after inactivity */
+  const editingClearTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Local presence state tracking to avoid stomping on each other
+  const localCursorRef = useRef<{ elementId: string; position: number } | null>(null);
+  const localEditingElementRef = useRef<string | null>(null);
+  
   const { toast } = useToast();
 
   // Optimized presence state processing
@@ -44,6 +51,11 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
                 };
               }
 
+              // Carry the active editing element (clears itself server-side when presence updates)
+              if (entry.editingElementId) {
+                userState.editingElementId = entry.editingElementId;
+              }
+
               if (existingIndex >= 0) {
                 // Update existing user with latest info (e.g., cursor) 
                 // Using the most recent presence usually preferred
@@ -62,6 +74,13 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
 
   // Optimized collaborator status update
   const updateCollaboratorStatus = useCallback((onlineUsers: PresenceUserState[]) => {
+    // Derive stable per-user colors (consistent across re-renders)
+    const COLLAB_COLORS = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD', '#98D8C8', '#F7DC6F'];
+    const colorForUser = (userId: string) => {
+      const index = userId.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0);
+      return COLLAB_COLORS[index % COLLAB_COLORS.length];
+    };
+
     setCollaborators(prev => {
       // 1. Map existing collaborators to update their status
       const updatedKnown = prev.map(collaborator => {
@@ -70,17 +89,20 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
           ? {
             ...collaborator,
             status: 'online' as const,
-            cursor: onlineMatch.cursor
+            color: colorForUser(collaborator.id),
+            cursor: onlineMatch.cursor,
+            editingElementId: onlineMatch.editingElementId,
           }
           : {
             ...collaborator,
             status: 'offline' as const,
-            cursor: undefined
+            color: colorForUser(collaborator.id),
+            cursor: undefined,
+            editingElementId: undefined,
           };
       });
 
       // 2. Find online users who are NOT in the known collaborators list
-      // (e.g. the owner if not explicitly in collaborators table, or new users)
       const unknownOnline = onlineUsers.filter(onlineUser =>
         !prev.some(known => known.id === onlineUser.user_id)
       );
@@ -88,12 +110,13 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
       const newCollaborators = unknownOnline.map(user => ({
         id: user.user_id,
         username: user.username || 'Anonymous',
-        email: '', // We might not know the email from presence alone
+        email: '',
         status: 'online' as const,
-        cursor: user.cursor
+        color: colorForUser(user.user_id),
+        cursor: user.cursor,
+        editingElementId: user.editingElementId,
       }));
 
-      // Return combined list
       return [...updatedKnown, ...newCollaborators];
     });
   }, []);
@@ -134,6 +157,29 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
 
     return userProfileRef.current;
   }, []);
+
+  /**
+   * Centralized helper to synchronize local presence state to the Supabase channel.
+   * This merges cursor position and active editing status into a single atomic update.
+   */
+  const syncPresence = useCallback(async () => {
+    try {
+      if (!scriptId || !isValidUuid(scriptId) || !channelRef.current) return;
+
+      const userProfile = await getUserProfile();
+      if (!userProfile) return;
+
+      await channelRef.current.track({
+        user_id: userProfile.userId,
+        username: userProfile.username,
+        cursor: localCursorRef.current,
+        editingElementId: localEditingElementRef.current,
+        last_seen: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Error syncing presence:', error);
+    }
+  }, [scriptId, getUserProfile]);
 
   // Setup presence channel with optimizations
   useEffect(() => {
@@ -192,7 +238,7 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
                 title: "Collaborator Left",
                 description: `${presence.username} went offline`,
                 duration: 3000,
-                variant: "secondary"
+                variant: "default"
               });
             }
           });
@@ -202,12 +248,8 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
 
           console.log('UseCollaboratorPresence: Subscribed to channel, tracking presence for:', userProfile.username);
 
-          // Set initial presence
-          await channel.track({
-            user_id: userProfile.userId,
-            username: userProfile.username,
-            last_seen: new Date().toISOString()
-          });
+          // Set initial presence using the centralized sync
+          await syncPresence();
         });
     };
 
@@ -232,23 +274,57 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
 
   // Optimized cursor position update with throttling
   const updateCursorPosition = useCallback(async (elementId: string, position: number) => {
+    localCursorRef.current = { elementId, position };
+    await syncPresence();
+  }, [syncPresence]);
+
+  const lastBroadcastTimeRef = useRef<number>(0);
+
+  /**
+   * Broadcast that the current user is actively typing in a specific element.
+   * The highlight auto-clears after 3 seconds of inactivity.
+   */
+  const broadcastEditActivity = useCallback(async (elementId: string) => {
     try {
       if (!scriptId || !isValidUuid(scriptId) || !channelRef.current) return;
 
       const userProfile = await getUserProfile();
       if (!userProfile) return;
 
-      // Throttle cursor updates to prevent spam
-      await channelRef.current.track({
-        user_id: userProfile.userId,
-        username: userProfile.username,
-        cursor: { elementId, position },
-        last_seen: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Error updating cursor position:', error);
-    }
-  }, [scriptId, getUserProfile]);
+      // Update local state
+      localEditingElementRef.current = elementId;
 
-  return { collaborators, updateCursorPosition };
+      // Throttle broadcast updates to at most once per second
+      const now = Date.now();
+      if (now - lastBroadcastTimeRef.current < 1000) {
+        // Reset clear timeout even if we don't broadcast, to keep it alive
+        if (editingClearTimeoutRef.current) {
+          clearTimeout(editingClearTimeoutRef.current);
+        }
+        editingClearTimeoutRef.current = setTimeout(async () => {
+          localEditingElementRef.current = null;
+          await syncPresence();
+        }, 3000);
+        return;
+      }
+
+      lastBroadcastTimeRef.current = now;
+
+      // Synchronize entire state (cursor + newly set editing element)
+      await syncPresence();
+
+      // Auto-clear editing highlight after 3 seconds of inactivity
+      if (editingClearTimeoutRef.current) {
+        clearTimeout(editingClearTimeoutRef.current);
+      }
+      editingClearTimeoutRef.current = setTimeout(async () => {
+        localEditingElementRef.current = null;
+        await syncPresence();
+      }, 3000);
+    } catch (error) {
+      console.error('Error broadcasting edit activity:', error);
+    }
+  }, [scriptId, getUserProfile, syncPresence]);
+
+  return { collaborators, updateCursorPosition, broadcastEditActivity };
 };

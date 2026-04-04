@@ -122,6 +122,7 @@ export const ScriptContentContainer = ({
 
   // Commenting & Selection
   const { selection: quoteSelection, clearSelection } = useQuoteSelection();
+  const { collaborators } = useCollaboration();
   const { comments, addComment, isLoading: commentsLoading } = useScriptComments(scriptId);
   const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
@@ -486,6 +487,7 @@ export const ScriptContentContainer = ({
                 onToggleSceneNav={toggleOutline}
                 isSceneNavOpen={isOutlineOpen}
                 activeElementType={activeElementType}
+                hideMobileSwitcher={!!quoteSelection || !!mobileActionSheet || isCommentsOpen}
                 onChangeElementType={(newType) => {
                   if (focusedElementId) {
                     changeElementType(focusedElementId, newType as ScriptElementType['type']);
@@ -494,7 +496,7 @@ export const ScriptContentContainer = ({
               />
             </div>
 
-            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-32 md:pb-32">
+            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-40 md:pb-32">
               <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl mb-12 md:mb-0">
                 {/* "Saving..." Indicator positioned top right of paper */}
                 <div className="hidden md:flex absolute -top-10 right-0 items-center gap-2 font-medium text-gray-500 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5 z-10">
@@ -534,7 +536,7 @@ export const ScriptContentContainer = ({
                           ...e,
                           content: e.content ? sanitizeScriptContent(validateAndCleanContent(e.content)) : "",
                         }))}
-                        collaborators={[]}
+                        collaborators={collaborators}
                         paperRef={paperRef}
                         onContentChange={handleContentChange}
                         onElementFocus={handleElementFocusInternal}

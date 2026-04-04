@@ -156,17 +156,18 @@ export const ScriptBreakdownPanel: React.FC<ScriptBreakdownPanelProps> = ({ elem
 
   return (
     <div className="p-6 space-y-6 bg-[#121212] min-h-full text-slate-200 overflow-y-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h1 className="text-2xl font-bold flex items-center gap-3 text-white">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-2">
+        <h1 className="text-xl sm:text-2xl font-bold flex items-center gap-3 text-white">
           Production Breakdown
-          <Badge variant="outline" className="text-naija-green border-naija-green">Beta</Badge>
+          <Badge variant="outline" className="text-naija-green border-naija-green text-[10px] sm:text-xs">Beta</Badge>
         </h1>
         
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button className="bg-naija-green hover:bg-naija-green/90 text-white">
-              <Download className="h-4 w-4 mr-2" />
-              Download Breakdown
+              <Download className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Download Breakdown</span>
+              <span className="sm:hidden px-1">Download</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">

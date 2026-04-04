@@ -7,6 +7,7 @@ import CollaboratorCursor from "../CollaboratorCursor";
 import { cn } from "@/lib/utils";
 import { useScriptEditor } from "@/contexts/ScriptEditorContext";
 import { useToast } from "@/hooks/use-toast";
+import { useCollaboration } from "@/contexts/CollaborationContext";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -15,7 +16,7 @@ import {
   ContextMenuSeparator,
   ContextMenuLabel,
 } from "@/components/ui/context-menu";
-import { FileText, Film, User, MessageSquare, Type, ArrowRight } from 'lucide-react';
+import { FileText, Film, User, MessageSquare, Type, ArrowRight, Pencil } from 'lucide-react';
 
 interface ScriptElementListProps {
   scriptElements: ScriptElementType[];
@@ -52,6 +53,23 @@ export const ScriptElementList = ({
   const elementRefsRef = useRef<Map<string, HTMLElement>>(new Map());
   const { insertScriptElement } = useScriptEditor();
   const { toast } = useToast();
+  const { broadcastEditActivity } = useCollaboration();
+
+  /**
+   * Map of elementId → array of collaborators currently editing that element.
+   * Derived from the collaborators prop so it updates reactively.
+   */
+  const activeEditorsByElement = useMemo(() => {
+    const map = new Map<string, Collaborator[]>();
+    collaborators
+      .filter(c => c.status === 'online' && c.editingElementId)
+      .forEach(c => {
+        const eid = c.editingElementId!;
+        if (!map.has(eid)) map.set(eid, []);
+        map.get(eid)!.push(c);
+      });
+    return map;
+  }, [collaborators]);
 
   // Memoize collaborator cursor positions for performance
   const collaboratorCursors = useMemo(() => {
@@ -337,7 +355,36 @@ export const ScriptElementList = ({
                   scriptElements={scriptElements}
                   sceneNumber={element.sceneNumber}
                   onLongPress={onLongPress}
+                  onEditActivity={broadcastEditActivity}
                 />
+
+                {/* Collaborator edit highlight overlay */}
+                {(() => {
+                  const editors = activeEditorsByElement.get(element.id);
+                  if (!editors?.length) return null;
+                  return (
+                    <>
+                      {/* Colored left border flash */}
+                      <div
+                        className="absolute inset-y-0 left-0 w-[3px] rounded-full animate-pulse pointer-events-none"
+                        style={{ backgroundColor: editors[0].color ?? '#4ECDC4' }}
+                      />
+                      {/* Stacked name badges — top-right corner */}
+                      <div className="absolute top-0 right-0 flex flex-col items-end gap-0.5 pointer-events-none z-20">
+                        {editors.map(editor => (
+                          <div
+                            key={editor.id}
+                            className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold text-white shadow animate-in fade-in duration-300"
+                            style={{ backgroundColor: editor.color ?? '#4ECDC4' }}
+                          >
+                            <Pencil className="w-2.5 h-2.5" />
+                            <span>{editor.username ?? 'Collaborator'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             </ContextMenuTrigger>
             <ContextMenuContent className="w-56">

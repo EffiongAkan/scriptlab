@@ -16,6 +16,8 @@ interface ScriptFormatToolbarProps {
   activeElementType?: string | null;
   /** Called when user taps a type chip in the mobile type-switcher */
   onChangeElementType?: (newType: string) => void;
+  /** If true, the mobile type switcher will be hidden (useful when other menus are active) */
+  hideMobileSwitcher?: boolean;
 }
 
 export const ScriptFormatToolbar = ({
@@ -26,6 +28,7 @@ export const ScriptFormatToolbar = ({
   isSceneNavOpen,
   activeElementType,
   onChangeElementType,
+  hideMobileSwitcher,
 }: ScriptFormatToolbarProps) => {
   const ELEMENT_TYPES = [
     { type: 'heading', label: 'H', fullLabel: 'Scene Heading' },
@@ -39,8 +42,8 @@ export const ScriptFormatToolbar = ({
   return (
     <div className="bg-[#1E1E1E] border-b border-gray-800 shadow-sm">
       {/* Mobile-only: Element Type Quick-Switcher */}
-      {onChangeElementType && (
-        <div className="sm:hidden flex items-center gap-1.5 px-3 py-2 border-b border-gray-800/60 overflow-x-auto">
+      {onChangeElementType && !hideMobileSwitcher && (
+        <div className="sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 border-b border-gray-800/60 overflow-x-auto min-w-full">
           <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest shrink-0 mr-1">Type:</span>
           {ELEMENT_TYPES.map(({ type, label, fullLabel }) => {
             const isActive = activeElementType === type;

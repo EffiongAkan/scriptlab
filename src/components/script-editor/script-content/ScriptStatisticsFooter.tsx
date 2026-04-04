@@ -47,7 +47,7 @@ export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFoote
   }, [scriptElements]);
 
   return (
-    <div className="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-40 p-2 sm:p-3 px-4 sm:px-6 bg-gray-900/90 backdrop-blur-md rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border border-white/10 shadow-2xl w-[calc(100%-1rem)] max-w-[320px] sm:max-w-none sm:min-w-[600px] transition-all duration-300">
+    <div className="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 p-2 sm:p-3 px-4 sm:px-6 bg-gray-900/90 backdrop-blur-md rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border border-white/10 shadow-2xl w-[calc(100%-1rem)] max-w-[320px] sm:max-w-none sm:min-w-[600px] transition-all duration-300">
       <div className="flex items-center space-x-6">
         <div className="flex items-center">
           <FileText className="w-4 h-4 mr-2 text-naija-gold/80" />
@@ -68,11 +68,15 @@ export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFoote
         </div>
       </div>
 
-      <div className="flex items-center ml-6">
-        <Clock className="w-4 h-4 mr-2 text-naija-gold/80" />
-        <span className="flex items-center gap-1">
-          Est. runtime: <span className="font-bold text-white tracking-wide">{statistics.estimatedRuntime}</span> min
-        </span>
+      <div className="flex items-center ml-3 sm:ml-6 shrink-0">
+        <Clock className="w-3.5 h-3.5 mr-1.5 sm:mr-2 text-naija-gold/80" />
+        <div className="flex flex-col items-center sm:items-start sm:flex-row sm:gap-1">
+          <span className="text-[7px] sm:text-[11px] font-bold text-gray-500 uppercase sm:hidden leading-none mb-0.5">ERT</span>
+          <span className="hidden sm:inline text-xs">Est. runtime:</span>
+          <span className="font-bold text-white text-[10px] sm:text-sm leading-none">
+            {statistics.estimatedRuntime}<span className="text-[8px] sm:text-xs font-normal text-gray-400 ml-0.5">min</span>
+          </span>
+        </div>
       </div>
     </div>
   );

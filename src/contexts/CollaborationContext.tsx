@@ -15,6 +15,8 @@ type CollaborationContextType = {
   acceptInvitation: (invitationId: string) => Promise<void>;
   rejectInvitation: (invitationId: string) => Promise<void>;
   updateCursorPosition: (elementId: string, position: number) => void;
+  /** Broadcast that the current user is typing in the given element (auto-clears after 3s) */
+  broadcastEditActivity: (elementId: string) => void;
 };
 
 const CollaborationContext = createContext<CollaborationContextType | undefined>(undefined);
@@ -88,7 +90,8 @@ export function CollaborationProvider({
 
   const {
     collaborators: liveCollaborators,
-    updateCursorPosition
+    updateCursorPosition,
+    broadcastEditActivity,
   } = useCollaboratorPresence(
     scriptId,
     collaborators
@@ -105,7 +108,7 @@ export function CollaborationProvider({
   };
 
   const value: CollaborationContextType = {
-    collaborators: liveCollaborators, // Use the live list with presence info
+    collaborators: liveCollaborators,
     invitations,
     pendingInvitations,
     isLoading,
@@ -113,7 +116,8 @@ export function CollaborationProvider({
     inviteCollaborator,
     acceptInvitation,
     rejectInvitation,
-    updateCursorPosition
+    updateCursorPosition,
+    broadcastEditActivity,
   };
 
   return (

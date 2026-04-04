@@ -44,7 +44,7 @@ export const NetworkStatusIndicator: React.FC = () => {
   };
 
   return (
-    <div className="fixed bottom-2 left-6 z-50 pointer-events-auto flex items-center gap-2">
+    <div className="fixed bottom-2 left-14 sm:left-6 z-50 pointer-events-auto flex items-center gap-2">
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>

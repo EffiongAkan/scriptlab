@@ -141,8 +141,8 @@ export const SubscriptionPlanManager: React.FC<SubscriptionPlanManagerProps> = (
       {/* Create/Edit Plan Card */}
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
               <Crown className="h-5 w-5" />
               {editingPlan ? `Edit ${newPlan.name} Plan` : 'Subscription Plans Management'}
             </CardTitle>

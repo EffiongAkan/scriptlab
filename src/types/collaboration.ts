@@ -8,10 +8,14 @@ export type Collaborator = {
   avatar_url?: string;
   status: 'online' | 'offline';
   lastActiveAt?: string;
+  /** Stable color hex for this collaborator (derived from their ID) */
+  color?: string;
   cursor?: {
     elementId: string;
     position: number;
   };
+  /** ID of the element this collaborator is currently actively typing in */
+  editingElementId?: string;
 };
 
 export type Invitation = {
@@ -58,6 +62,8 @@ export type PresenceUserState = {
     elementId: string;
     position: number;
   };
+  /** ID of the element this user is actively typing in */
+  editingElementId?: string;
 };
 
 export interface PresenceStateEntry {
@@ -68,4 +74,5 @@ export interface PresenceStateEntry {
     elementId: string;
     position: number;
   };
+  editingElementId?: string;
 }

@@ -26,7 +26,7 @@ export function PlotGeneratorContent({
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <CardTitle>Generated Content</CardTitle>
             <CardDescription>

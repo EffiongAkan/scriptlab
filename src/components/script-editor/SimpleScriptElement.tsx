@@ -17,6 +17,8 @@ interface SimpleScriptElementProps {
   scriptElements: ScriptElementType[]; // Full list for autocomplete
   sceneNumber?: number | null;
   onLongPress?: (id: string, type: ScriptElementType['type'], content: string) => void;
+  /** Called (debounced) when the user types — used to broadcast edit activity to other collaborators */
+  onEditActivity?: (elementId: string) => void;
 }
 
 export const SimpleScriptElement = ({
@@ -30,6 +32,7 @@ export const SimpleScriptElement = ({
   scriptElements,
   sceneNumber,
   onLongPress,
+  onEditActivity,
 }: SimpleScriptElementProps) => {
   const [localContent, setLocalContent] = useState(content);
   const { focusedElementId, setFocusedElementId } = useScriptEditor();
@@ -54,7 +57,9 @@ export const SimpleScriptElement = ({
   const handleContentChange = useCallback((newContent: string) => {
     setLocalContent(newContent);
     onChange(id, newContent);
-  }, [id, onChange]);
+    // Notify parent about active typing so it can broadcast to collaborators
+    onEditActivity?.(id);
+  }, [id, onChange, onEditActivity]);
 
   const handleFocusInternal = useCallback(() => {
     setFocusedElementId(id);
