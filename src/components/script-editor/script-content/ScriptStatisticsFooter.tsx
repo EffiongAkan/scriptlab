@@ -47,7 +47,7 @@ export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFoote
   }, [scriptElements]);
 
   return (
-    <div className="fixed bottom-2 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 p-2 sm:p-3 px-4 sm:px-6 bg-gray-900/90 backdrop-blur-md rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border border-white/10 shadow-2xl w-[calc(100%-1rem)] max-w-[320px] sm:max-w-none sm:min-w-[600px] transition-all duration-300">
+    <div className="md:fixed md:bottom-6 md:left-1/2 md:-translate-x-1/2 z-30 p-2 sm:p-3 px-4 sm:px-6 bg-[#1A1A1A] md:bg-gray-900/90 backdrop-blur-md rounded-none md:rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border-0 md:border md:border-white/10 shadow-none md:shadow-2xl w-full sm:w-auto max-w-none sm:max-w-none sm:min-w-[600px] transition-all duration-300 pb-safe">
       <div className="flex items-center space-x-6">
         <div className="flex items-center">
           <FileText className="w-4 h-4 mr-2 text-naija-gold/80" />

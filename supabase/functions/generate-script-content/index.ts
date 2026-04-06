@@ -118,8 +118,7 @@ serve(async (req) => {
       temperature
     } = requestBody;
 
-    // Use custom system prompt if provided, otherwise fallback to default expert screenwriter
-    const systemPrompt = customSystemPrompt || `You are an expert professional screenwriter. 
+    const systemPromptHead = customSystemPrompt || `You are an expert professional screenwriter. 
     Write authentic, engaging screenplay content in industry-standard format.
     ALWAYS use the following tag format for EVERY element:
     [HEADING] INT./EXT. LOCATION - TIME
@@ -131,6 +130,17 @@ serve(async (req) => {
     
     DO NOT include placeholder labels like "(PAREN)" or "Character Name" inside the tags. 
     Only output the screenplay content and tags.`;
+
+    const isFullRewrite = prompt?.includes('[GLOBAL REWRITE REQUEST]') || prompt?.includes('[USER INSTRUCTION FOR MODIFICATION]');
+    
+    const verbosityInstruction = isFullRewrite ? `
+    IMPORTANT: You are in FULL REWRITE mode. 
+    - Write every single scene with maximum detail and dialogue.
+    - NEVER use scene numbers (e.g., SCENE 1, SCENE 2). Only use INT./EXT. headings.
+    - NEVER summarize or use placeholders like "The story continues...".
+    - Aim for an extensive, full-length screenplay output.` : "";
+
+    const systemPrompt = `${systemPromptHead}${verbosityInstruction}`;
 
     // Construct user prompt with robust context handling
     // We prioritize keeping context even if a direct prompt is given
@@ -213,7 +223,7 @@ serve(async (req) => {
           model: activeModel || "gpt-4o",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           temperature: temperature || 0.7,
-          max_tokens: maxTokens || 1000
+          max_tokens: maxTokens || 4000
         };
         if (isAnalysis) {
           apiData.response_format = { type: "json_object" };
@@ -226,7 +236,7 @@ serve(async (req) => {
         headers["anthropic-version"] = "2023-06-01";
         apiData = {
           model: activeModel || "claude-3-5-sonnet-20241022",
-          max_tokens: maxTokens || 3000,
+          max_tokens: maxTokens || 8000,
           messages: [{ role: "user", content: userPrompt }],
           system: systemPrompt
         };
@@ -239,7 +249,7 @@ serve(async (req) => {
           model: activeModel || "grok-beta",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           temperature: temperature || 0.7,
-          max_tokens: maxTokens || 1000
+          max_tokens: maxTokens || 4000
         };
         break;
       case 'deepseek':
@@ -251,7 +261,7 @@ serve(async (req) => {
           model: activeModel || "deepseek-chat",
           messages: [{ role: "system", content: systemPrompt }, { role: "user", content: userPrompt }],
           temperature: temperature || 0.7,
-          max_tokens: maxTokens || 1000
+          max_tokens: maxTokens || 4000
         };
         if (isAnalysis) {
           apiData.response_format = { type: "json_object" };

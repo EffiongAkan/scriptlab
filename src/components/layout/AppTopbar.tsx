@@ -1,9 +1,9 @@
 
 import React from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu, DollarSign, Shield, Zap } from "lucide-react";
+import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu, DollarSign, Shield, Zap, LogOut } from "lucide-react";
 import { useScriptSave } from "@/hooks/useScriptSave";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
@@ -25,13 +25,14 @@ const menuItems = [
 ];
 
 export const AppTopbar: React.FC = () => {
+  const navigate = useNavigate();
   const location = useLocation();
   const { toast } = useToast();
   const isMobile = useIsMobile();
 
   // Get script ID only when in /editor/:id, for saving
-  const scriptIdMatch = location.pathname.match(/\/editor\/([^/]+)/);
-  const scriptId = scriptIdMatch ? scriptIdMatch[1] : null;
+  const scriptIdMatch = location.pathname.match(/^\/editor\/([^\/]+)/);
+  const scriptId = scriptIdMatch && scriptIdMatch[1] !== 'new' ? scriptIdMatch[1] : null;
 
   const { saveScript, isSaving } = useScriptSave(scriptId || "");
   const { elements, scriptData } = useScriptContent(scriptId || "");
@@ -57,6 +58,10 @@ export const AppTopbar: React.FC = () => {
   const isLowCredits = (credits ?? 0) < 5;
 
   const [saveStatus, setSaveStatus] = React.useState<'idle' | 'saving' | 'success' | 'error'>('idle');
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    navigate("/auth");
+  };
 
   const handleSaveProject = async () => {
     try {
@@ -194,7 +199,7 @@ export const AppTopbar: React.FC = () => {
       </div>
 
       {/* Right Actions */}
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-3">
         {/* Credits Badge */}
         <Link to="/premium?tab=credits" className="flex">
           <Button
@@ -215,21 +220,35 @@ export const AppTopbar: React.FC = () => {
         <NotificationBell />
 
         {/* Save Button */}
+        {scriptId && (
+          <Button
+            onClick={handleSaveProject}
+            className={`bg-naija-gold text-black hover:bg-naija-gold-dark px-3 md:px-4 ${saveStatus === 'success' ? "ring ring-naija-green ring-offset-2" : ""}`}
+            disabled={isSaving || saveStatus === 'saving'}
+            size={isMobile ? "sm" : "default"}
+            aria-label="Save"
+          >
+            <Save className="h-4 w-4 mr-1" />
+            <span className="hidden sm:inline">
+              {isSaving || saveStatus === 'saving'
+                ? "Saving..."
+                : saveStatus === 'success'
+                  ? "Saved!"
+                  : "Save"}
+            </span>
+          </Button>
+        )}
+
+        {/* Logout Button */}
         <Button
-          onClick={handleSaveProject}
-          className={`bg-naija-gold text-black hover:bg-naija-gold-dark ml-2 px-3 md:px-4 ${saveStatus === 'success' ? "ring ring-naija-green ring-offset-2" : ""}`}
-          disabled={isSaving || saveStatus === 'saving'}
+          variant="ghost"
           size={isMobile ? "sm" : "default"}
-          aria-label="Save"
+          onClick={handleSignOut}
+          className="text-sidebar-foreground px-2"
+          aria-label="Sign Out"
         >
-          <Save className="h-4 w-4 mr-1" />
-          <span className="hidden sm:inline">
-            {isSaving || saveStatus === 'saving'
-              ? "Saving..."
-              : saveStatus === 'success'
-                ? "Saved!"
-                : "Save"}
-          </span>
+          <LogOut className="h-5 w-5" />
+          {!isMobile && <span className="ml-2 text-sm">Sign Out</span>}
         </Button>
       </div>
     </nav>

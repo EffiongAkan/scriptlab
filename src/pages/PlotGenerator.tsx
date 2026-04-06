@@ -18,6 +18,8 @@ import { getIndustryAIPromptContext, filmIndustryContexts } from "@/utils/filmIn
 import { getScriptTypeGuidance, getScriptTypeContext } from "@/utils/scriptTypeGuidance";
 import { getOptionsForIndustry } from "@/utils/industryOptions";
 import { deductAICredits, fetchAICredits } from "@/hooks/useAICredits";
+import { useWakeLock } from "@/hooks/useWakeLock";
+import { useRef } from "react";
 
 
 interface SynopsisOption {
@@ -90,6 +92,42 @@ export default function PlotGenerator() {
   const [currentEpisodeIndex, setCurrentEpisodeIndex] = useState(0);
   const [totalEpisodes, setTotalEpisodes] = useState(0);
   const [isMultiEpisode, setIsMultiEpisode] = useState(false);
+
+  // Background stability refs
+  const currentBatchRef = useRef(0);
+  const isGeneratingRef = useRef(false);
+
+  // Automatic Wake Lock management
+  const { isActive: isWakeLockActive } = useWakeLock(isGeneratingScript || isGeneratingSynopses || isGeneratingPlotMap);
+
+  // Sync refs with state for background recovery
+  useEffect(() => {
+    isGeneratingRef.current = isGeneratingScript;
+  }, [isGeneratingScript]);
+
+  useEffect(() => {
+    currentBatchRef.current = currentBatch;
+  }, [currentBatch]);
+
+  // Handle visibility changes for batch generation recovery
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && isGeneratingRef.current) {
+        console.log('[PlotGenerator] Tab became visible. Checking generation state...', {
+          batch: currentBatchRef.current,
+          progress: generationProgress
+        });
+        
+        toast({
+          title: "Synchronizing...",
+          description: `Resuming screenplay generation at batch ${currentBatchRef.current}.`,
+        });
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange);
+  }, [generationProgress, toast]);
 
   // Load initial data on component mount
   useEffect(() => {

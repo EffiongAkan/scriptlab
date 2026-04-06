@@ -45,16 +45,6 @@ export function Layout({ children }: LayoutProps) {
                   <AppTopbar />
                 </div>
 
-                {/* Sign Out Button */}
-                <Button
-                  variant="ghost"
-                  size={isMobile ? "sm" : "default"}
-                  onClick={handleSignOut}
-                  className="shrink-0"
-                >
-                  <LogOut className="h-4 w-4 mr-1" />
-                  <span className="hidden sm:inline">Sign Out</span>
-                </Button>
               </div>
             </header>
           )}

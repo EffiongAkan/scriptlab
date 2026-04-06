@@ -95,7 +95,9 @@ export const generateAIContent = async (request: AIRequest): Promise<AIResponse>
     console.log(`Invoking ${functionName} with:`, requestBody);
 
     const { data, error } = await supabase.functions.invoke(functionName, {
-      body: requestBody
+      body: requestBody,
+      // @ts-ignore - keepalive is supported in modern browsers but may not be in all TS types
+      headers: { 'keepalive': 'true' }
     });
 
     if (error) {

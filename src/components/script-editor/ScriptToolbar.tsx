@@ -265,7 +265,7 @@ export const ScriptToolbar = ({
       </div>
 
       {/* Mobile Floating Action Button - Only visible on mobile */}
-      <div className="md:hidden fixed bottom-32 right-6 z-[100]">
+      <div className="md:hidden fixed bottom-44 right-6 z-[100]">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button className="h-14 w-14 rounded-full bg-naija-green hover:bg-naija-green-dark text-white shadow-2xl flex items-center justify-center border-2 border-white/20">

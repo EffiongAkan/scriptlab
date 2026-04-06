@@ -115,69 +115,77 @@ export const EnhancedScriptAnalysisPanel: React.FC<EnhancedScriptAnalysisPanelPr
 
   return (
     <div className="bg-slate-800 text-white min-h-screen">
-      <div className="p-6">
-        <div className="flex items-center justify-between mb-2">
-          <h1 className="text-2xl font-bold flex items-center gap-3">
+      <div className="p-4 md:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+          <h1 className="text-xl md:text-2xl font-bold flex items-center gap-3">
             Script Analysis
-            {isLoading && <Loader2 className="h-6 w-6 animate-spin text-naija-green" />}
+            {isLoading && <Loader2 className="h-5 w-5 md:h-6 md:w-6 animate-spin text-naija-green" />}
           </h1>
-          <div className="flex items-center gap-4">
+          
+          <div className="flex flex-wrap items-center gap-2 md:gap-4">
             {!isLoading && analytics.analysisProgress.completed < analytics.analysisProgress.total && (
-              <span className="text-sm text-slate-400">
+              <span className="text-xs md:text-sm text-slate-400 w-full sm:w-auto mb-1 sm:mb-0">
                 {analytics.analysisProgress.completed}/{analytics.analysisProgress.total} sections complete
               </span>
             )}
-            {/* Implement All Suggestions */}
-            <ImplementSuggestionsButton
-              recommendations={analytics.recommendations}
-              elements={elements}
-              onImplemented={(updated) => {
-                if (onImplementAllSuggestions) onImplementAllSuggestions(updated);
-              }}
-              disabled={isLoading || analytics.analysisProgress.completed === 0}
-            />
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-blue-500/10 text-blue-400 border-blue-500 hover:bg-blue-500 hover:text-white"
-                  disabled={isLoading || analytics.analysisProgress.completed === 0}
-                >
-                  <Download className="h-4 w-4 mr-2" />
-                  Export Analysis
-                  <ChevronDown className="h-4 w-4 ml-2" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={handleExportPDF}>
-                  <FileText className="h-4 w-4 mr-2" />
-                  Export as PDF
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={handleExportMarkdown}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export as Markdown
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-            <Button
-              variant="outline"
-              className="bg-naija-green/10 text-naija-green border-naija-green hover:bg-naija-green hover:text-white"
-              onClick={() => analytics.reanalyze()}
-              disabled={isLoading}
-            >
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Analyzing ({analytics.analysisProgress.completed}/{analytics.analysisProgress.total})...
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="mr-2 h-4 w-4" />
-                  Refresh Analysis
-                </>
-              )}
-            </Button>
+            
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Implement All Suggestions */}
+              <ImplementSuggestionsButton
+                recommendations={analytics.recommendations}
+                elements={elements}
+                onImplemented={(updated) => {
+                  if (onImplementAllSuggestions) onImplementAllSuggestions(updated);
+                }}
+                disabled={isLoading || analytics.analysisProgress.completed === 0}
+              />
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-blue-500/10 text-blue-400 border-blue-500 hover:bg-blue-500 hover:text-white"
+                    disabled={isLoading || analytics.analysisProgress.completed === 0}
+                  >
+                    <Download className="h-4 w-4 mr-2" />
+                    <span className="hidden xs:inline">Export Analysis</span>
+                    <span className="xs:hidden">Export</span>
+                    <ChevronDown className="h-4 w-4 ml-2" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={handleExportPDF}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportMarkdown}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export as Markdown
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-naija-green/10 text-naija-green border-naija-green hover:bg-naija-green hover:text-white"
+                onClick={() => analytics.reanalyze()}
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <span className="hidden xs:inline text-xs">Analyzing...</span>
+                  </>
+                ) : (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4" />
+                    <span className="hidden xs:inline">Refresh</span>
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </div>
 

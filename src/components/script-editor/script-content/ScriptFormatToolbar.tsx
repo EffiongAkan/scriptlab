@@ -40,7 +40,7 @@ export const ScriptFormatToolbar = ({
   ];
 
   return (
-    <div className="bg-[#1E1E1E] border-b border-gray-800 shadow-sm">
+    <div className="bg-[#1E1E1E] md:border-b border-gray-800 shadow-sm">
       {/* Mobile-only: Element Type Quick-Switcher */}
       {onChangeElementType && !hideMobileSwitcher && (
         <div className="sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 border-b border-gray-800/60 overflow-x-auto min-w-full">

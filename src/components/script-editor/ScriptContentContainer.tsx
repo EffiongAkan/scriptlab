@@ -478,25 +478,32 @@ export const ScriptContentContainer = ({
             className="absolute inset-0 overflow-y-auto overscroll-contain flex flex-col items-center scroll-smooth"
             style={{ overscrollBehaviorY: 'contain' }}
           >
-            {/* Format Toolbar Integrated into Writing Area */}
-            <div className="w-full z-30 fixed bottom-0 left-0 md:relative md:sticky md:top-0">
-              <ScriptFormatToolbar
-                zoom={zoom}
-                onZoomChange={setZoom}
-                onInsertElement={insertScriptElement}
-                onToggleSceneNav={toggleOutline}
-                isSceneNavOpen={isOutlineOpen}
-                activeElementType={activeElementType}
-                hideMobileSwitcher={!!quoteSelection || !!mobileActionSheet || isCommentsOpen}
-                onChangeElementType={(newType) => {
-                  if (focusedElementId) {
-                    changeElementType(focusedElementId, newType as ScriptElementType['type']);
-                  }
-                }}
-              />
+            {/* Format Toolbar and Stats stacking on Mobile */}
+            <div className="w-full z-40 fixed bottom-0 left-0 md:relative md:sticky md:top-0 bg-[#1A1A1A] md:bg-transparent flex flex-col pointer-events-none md:pointer-events-auto shadow-[0_-10px_20px_rgba(0,0,0,0.4)] md:shadow-none">
+              <div className="pointer-events-auto w-full">
+                <ScriptFormatToolbar
+                  zoom={zoom}
+                  onZoomChange={setZoom}
+                  onInsertElement={insertScriptElement}
+                  onToggleSceneNav={toggleOutline}
+                  isSceneNavOpen={isOutlineOpen}
+                  activeElementType={activeElementType}
+                  hideMobileSwitcher={!!quoteSelection || !!mobileActionSheet || isCommentsOpen}
+                  onChangeElementType={(newType) => {
+                    if (focusedElementId) {
+                      changeElementType(focusedElementId, newType as ScriptElementType['type']);
+                    }
+                  }}
+                />
+              </div>
+              
+              {/* Statistics Footer stacked at the very bottom on mobile */}
+              <div className="md:hidden pointer-events-auto w-full bg-[#1E1E1E] border-t border-gray-800 flex justify-center pb-safe">
+                <ScriptStatisticsFooter scriptElements={scriptElements} />
+              </div>
             </div>
 
-            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-40 md:pb-32">
+            <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-44 md:pb-32">
               <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl mb-12 md:mb-0">
                 {/* "Saving..." Indicator positioned top right of paper */}
                 <div className="hidden md:flex absolute -top-10 right-0 items-center gap-2 font-medium text-gray-500 bg-white/10 backdrop-blur-sm px-3 py-1.5 rounded-full border border-white/5 z-10">
@@ -565,7 +572,9 @@ export const ScriptContentContainer = ({
                 </ScriptPaper>
               </div>
 
-              <ScriptStatisticsFooter scriptElements={scriptElements} />
+              <div className="hidden md:block">
+                <ScriptStatisticsFooter scriptElements={scriptElements} />
+              </div>
             </div>
           </div>
         </main>

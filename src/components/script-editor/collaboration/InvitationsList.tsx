@@ -81,16 +81,16 @@ export const InvitationsList = ({
             {pendingInvitations.map((invitation) => (
               <Card key={invitation.id} className="border-l-4 border-l-yellow-500">
                 <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-start gap-3 flex-1">
-                      <Avatar className="h-10 w-10">
+                  <div className="flex flex-col sm:flex-row items-center sm:items-start justify-between gap-4">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      <Avatar className="h-10 w-10 shrink-0">
                         <AvatarFallback className="bg-yellow-100 text-yellow-700">
                           <User className="h-5 w-5" />
                         </AvatarFallback>
                       </Avatar>
                       
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex flex-wrap items-center gap-2 mb-1">
                           <span className="font-medium text-sm truncate">
                             {invitation.inviterEmail}
                           </span>
@@ -111,22 +111,22 @@ export const InvitationsList = ({
                       </div>
                     </div>
                     
-                    <div className="flex gap-2 ml-4">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto mt-4 sm:mt-0 items-stretch sm:items-center">
                       <Button 
                         size="sm" 
                         variant="outline" 
                         onClick={() => onReject(invitation.id)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="w-full sm:w-auto text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200"
                       >
-                        <X className="mr-1 h-3 w-3" /> 
+                        <X className="mr-2 h-3 w-3" /> 
                         Decline
                       </Button>
                       <Button 
                         size="sm" 
                         onClick={() => onAccept(invitation.id)}
-                        className="bg-green-600 hover:bg-green-700 text-white"
+                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700 text-white"
                       >
-                        <Check className="mr-1 h-3 w-3" /> 
+                        <Check className="mr-2 h-3 w-3" /> 
                         Accept
                       </Button>
                     </div>

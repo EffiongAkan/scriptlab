@@ -1,5 +1,6 @@
 
 import React, { useEffect, useRef, useMemo, useCallback } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { SimpleScriptElement } from "../SimpleScriptElement";
 import { ScriptElementType, useScriptContent } from "@/hooks/useScriptContent";
 import { Collaborator } from "@/types/collaboration";
@@ -47,6 +48,7 @@ export const ScriptElementList = ({
   onElementClick,
   onLongPress,
 }: ScriptElementListProps) => {
+  const isMobile = useIsMobile();
   const previousElementsLengthRef = useRef(0);
   const newElementRef = useRef<string | null>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -303,6 +305,87 @@ export const ScriptElementList = ({
           parenthetical: { label: 'Parenthetical', icon: <Type className="w-4 h-4" />, description: '(action or emotion)' },
           transition: { label: 'Transition', icon: <ArrowRight className="w-4 h-4" />, description: 'CUT TO: / FADE OUT:' }
         };
+
+        if (isMobile) {
+          return (
+            <div
+              key={element.id}
+              id={`script-element-${element.id}`}
+              ref={(el) => registerElementRef(element.id, el)}
+              onClick={(e) => {
+                if (onElementClick) {
+                  onElementClick(element.id, e as unknown as React.MouseEvent);
+                }
+              }}
+              className={cn(
+                "transition-all duration-200 relative group px-2 rounded-md",
+                isNewElement && "script-element-fade-in animate-pulse",
+                element.type === 'heading' && "relative mt-8 first:mt-0",
+                selectedElementIds?.has(element.id) && "bg-blue-100/10 ring-2 ring-blue-500/50"
+              )}
+              data-element-id={element.id}
+              data-element-type={element.type}
+            >
+              {/* Enhanced line numbers with scene indicators */}
+              <div className="hidden sm:flex absolute -left-16 text-gray-400 text-xs select-none pt-1 flex-col items-end">
+                <span>{element.index + 1}</span>
+              </div>
+
+              {/* Visual indicator for element types */}
+              <div className="absolute -left-2 top-1 w-1 h-6 rounded-full opacity-0 group-hover:opacity-100 transition-opacity text-gray-400">
+                <div className={cn(
+                  "w-full h-full rounded-full",
+                  element.type === 'heading' && "bg-blue-500",
+                  element.type === 'character' && "bg-green-500",
+                  element.type === 'dialogue' && "bg-yellow-500",
+                  element.type === 'action' && "bg-gray-500",
+                  element.type === 'parenthetical' && "bg-purple-500",
+                  element.type === 'transition' && "bg-red-500"
+                )} />
+              </div>
+
+              <SimpleScriptElement
+                id={element.id}
+                type={element.type}
+                content={element.content}
+                revision={revision}
+                onChange={debouncedContentChange}
+                onFocus={() => onElementFocus(element.id)}
+                onEnterPress={handleEnterPress}
+                scriptElements={scriptElements}
+                sceneNumber={element.sceneNumber}
+                onLongPress={onLongPress}
+                onEditActivity={broadcastEditActivity}
+              />
+
+              {/* Collaborator edit highlight overlay */}
+              {(() => {
+                const editors = activeEditorsByElement.get(element.id);
+                if (!editors?.length) return null;
+                return (
+                  <>
+                    <div
+                      className="absolute inset-y-0 left-0 w-[3px] rounded-full animate-pulse pointer-events-none"
+                      style={{ backgroundColor: editors[0].color ?? '#4ECDC4' }}
+                    />
+                    <div className="absolute top-0 right-0 flex flex-col items-end gap-0.5 pointer-events-none z-20">
+                      {editors.map(editor => (
+                        <div
+                          key={editor.id}
+                          className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-semibold text-white shadow animate-in fade-in duration-300"
+                          style={{ backgroundColor: editor.color ?? '#4ECDC4' }}
+                        >
+                          <Pencil className="w-2.5 h-2.5" />
+                          <span>{editor.username ?? 'Collaborator'}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          );
+        }
 
         return (
           <ContextMenu key={element.id}>

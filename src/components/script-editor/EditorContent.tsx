@@ -324,8 +324,8 @@ export function EditorContent() {
         <div className="fixed bottom-4 right-4 w-[600px] md:w-[700px] max-w-[90vw] z-[200]">
           <AIPromptBox
             onClose={() => setShowAIPromptBox(false)}
-            onApply={async (content) => {
-              console.log("Applying AI content:", content);
+            onApply={async (content, options) => {
+              console.log("Applying AI content. Full replace:", options?.replaceFull);
 
               try {
                 // Parse the generated content into script elements
@@ -337,8 +337,14 @@ export function EditorContent() {
                   let updatedElements = [...currentElements];
                   let appliedCount = 0;
 
+                  // NEW LOGIC: Full Script Replacement
+                  if (options?.replaceFull) {
+                    console.log("Deep Edit: Replacing entire script.");
+                    updatedElements = parsedElements;
+                    appliedCount = parsedElements.length;
+                  } 
                   // NEW LOGIC: In-place replacement for specific selection
-                  if (aiInitialSelection?.elementId) {
+                  else if (aiInitialSelection?.elementId) {
                     console.log(`Modifying specific element: ${aiInitialSelection.elementId}`);
                     // Find index of element to replace
                     const targetIndex = currentElements.findIndex(e => e.id === aiInitialSelection.elementId);
@@ -483,16 +489,24 @@ export function EditorContent() {
               }
             }}
             scriptContext={(() => {
-              if (aiInitialSelection?.elementId && historyElements) {
-                const idx = historyElements.findIndex(e => e.id === aiInitialSelection.elementId);
+              // Priority 1: Full Script Context (Full Rewrites)
+              // If we are in "Full Rewrite" mode (we don't have a state for it here yet, 
+              // but we can pass the whole script if no selection is made, or just always 
+              // provide a more comprehensive context if available)
+              const allElements = historyElements || [];
+              
+              if (aiInitialSelection?.elementId) {
+                const idx = allElements.findIndex(e => e.id === aiInitialSelection.elementId);
                 if (idx !== -1) {
-                  const start = Math.max(0, idx - 15);
-                  const end = Math.min(historyElements.length, idx + 15);
-                  return `Title: ${title}\nContext Around Selection:\n${historyElements.slice(start, end).map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
+                  const start = Math.max(0, idx - 20);
+                  const end = Math.min(allElements.length, idx + 20);
+                  return `Title: ${title}\nContext Around Selection:\n${allElements.slice(start, end).map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
                 }
               }
-              const recent = historyElements?.slice(-30) || [];
-              return `Title: ${title}\nRecent Script Content:\n${recent.map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
+
+              // Default to providing as much context as possible (up to ~100 elements for safety)
+              const contextElements = allElements.length > 100 ? allElements.slice(-100) : allElements;
+              return `Title: ${title}\n${allElements.length > 100 ? 'Recent ' : 'Full '}Script Content:\n${contextElements.map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
             })()}
             scriptData={scriptData || undefined}
             characters={characters}
