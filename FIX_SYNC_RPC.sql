@@ -37,15 +37,11 @@ BEGIN
   -- Defer the unique constraint so rows can swap positions freely mid-transaction
   SET CONSTRAINTS unique_script_position DEFERRED;
 
-  -- 1. Create a quick, indexed temporary table to hold the incoming IDs.
-  -- This prevents Postgres from constantly re-evaluating the JSON array in the cleanup CTE.
-  CREATE TEMP TABLE temp_incoming_ids ON COMMIT DROP AS 
-  SELECT (value->>'id')::uuid AS id, (ordinality - 1)::integer AS new_position, value
-  FROM jsonb_array_elements(p_elements) WITH ORDINALITY;
-
-  CREATE INDEX idx_temp_incoming_id ON temp_incoming_ids(id);
-
-  -- 2. Bulk Upsert in exactly ONE extremely fast query using the temporary table
+  -- 1. Bulk Upsert in exactly ONE extremely fast query using a CTE
+  WITH incoming AS (
+    SELECT (value->>'id')::uuid AS id, (ordinality - 1)::integer AS new_position, value
+    FROM jsonb_array_elements(p_elements) WITH ORDINALITY
+  )
   INSERT INTO public.script_elements (id, script_id, type, content, position)
   SELECT 
     id,
@@ -53,28 +49,32 @@ BEGIN
     (value->>'type')::script_element_type,
     COALESCE(value->>'content', ''),
     new_position
-  FROM temp_incoming_ids
+  FROM incoming
   ON CONFLICT (id) DO UPDATE SET
     type = EXCLUDED.type,
     content = EXCLUDED.content,
     position = EXCLUDED.position,
-    updated_at = NOW();
+    updated_at = NOW()
+  WHERE script_elements.type IS DISTINCT FROM EXCLUDED.type
+     OR script_elements.content IS DISTINCT FROM EXCLUDED.content
+     OR script_elements.position IS DISTINCT FROM EXCLUDED.position;
 
   -- Get total elements inserted for our orphan offset
-  SELECT count(*) INTO v_index FROM temp_incoming_ids;
+  v_index := jsonb_array_length(p_elements);
   
-  -- 3. Cleanup: Shift any orphaned elements instantly using an Anti-Join
+  -- 2. Cleanup: Shift any orphaned elements instantly
   WITH orphans AS (
     SELECT id, row_number() OVER (ORDER BY position) as seq
     FROM public.script_elements
     WHERE script_id = p_script_id 
-      AND NOT EXISTS (SELECT 1 FROM temp_incoming_ids t WHERE t.id = script_elements.id)
+      AND id NOT IN (SELECT (value->>'id')::uuid FROM jsonb_array_elements(p_elements))
   )
   UPDATE public.script_elements e
   SET position = v_index + o.seq,
       updated_at = NOW()
   FROM orphans o
-  WHERE e.id = o.id;
+  WHERE e.id = o.id
+    AND e.position IS DISTINCT FROM (v_index + o.seq);
 
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;

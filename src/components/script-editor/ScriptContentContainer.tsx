@@ -91,7 +91,8 @@ export const ScriptContentContainer = ({
     blockRealtimeSync,
     selectedElementIds,
     handleElementClick,
-    deleteSelectedElements
+    deleteSelectedElements,
+    setAllElements
   } = useScriptContentState(scriptId, elementsToUse, onContentChange);
 
   // Handle delete key for batch deletion
@@ -384,6 +385,14 @@ export const ScriptContentContainer = ({
       // Insert at new position
       newElements.splice(finalInsertIndex, 0, ...sceneElements);
 
+      // CRITICAL FIX: Reindex positions manually before passing to any state updates.
+      // Otherwise setAllElements inside useLocalElementState will physically sort them 
+      // BACK to their original positions using the stale `.position` numbers.
+      const reindexedElements = newElements.map((el, index) => ({
+        ...el,
+        position: index
+      }));
+
       // Use the hook function to update local state and persist
       if (reorderElements) {
         // Block realtime sync temporarily to prevent "snap back" due to partial updates
@@ -391,7 +400,12 @@ export const ScriptContentContainer = ({
           blockRealtimeSync(5000); // 5 seconds grace period
         }
 
-        await reorderElements(newElements);
+        // Force local state update IMMEDIATELY with the reindexed elements
+        if (setAllElements) {
+          setAllElements(reindexedElements);
+        }
+
+        await reorderElements(reindexedElements);
 
         toast({
           title: "Scene reordered",
@@ -494,6 +508,10 @@ export const ScriptContentContainer = ({
                       changeElementType(focusedElementId, newType as ScriptElementType['type']);
                     }
                   }}
+                  currentPage={currentPage}
+                  totalPages={totalPages}
+                  onPrevPage={handlePrevPage}
+                  onNextPage={handleNextPage}
                 />
               </div>
               
@@ -559,10 +577,6 @@ export const ScriptContentContainer = ({
                       {totalPages > 1 && (
                         <div className="mt-20 border-t border-gray-100 pt-4 flex justify-between items-center text-[10px] text-gray-400 font-mono">
                           <span>PAGE {currentPage + 1} OF {totalPages}</span>
-                          <div className="flex gap-2">
-                            <button onClick={handlePrevPage} disabled={currentPage === 0} className="hover:text-gray-900 disabled:opacity-30">PREV</button>
-                            <button onClick={handleNextPage} disabled={currentPage === totalPages - 1} className="hover:text-gray-900 disabled:opacity-30">NEXT</button>
-                          </div>
                         </div>
                       )}
                     </>

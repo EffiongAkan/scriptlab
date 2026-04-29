@@ -25,10 +25,58 @@ export const AIModelSelector: React.FC<AIModelSelectorProps> = ({ apiKeyStatuses
     const { toast } = useToast();
 
     const providers = [
-        { id: 'deepseek', name: 'DeepSeek', models: ['deepseek-chat', 'deepseek-reasoner'] },
+        {
+            id: 'deepseek',
+            name: 'DeepSeek',
+            models: [
+                // DeepSeek V3 (latest chat)
+                'deepseek-chat',
+                'deepseek-v3',
+                // DeepSeek R1 (reasoning)
+                'deepseek-reasoner',
+                'deepseek-r1',
+                'deepseek-r1-zero',
+                // DeepSeek R1 Distill — Qwen base
+                'deepseek-r1-distill-qwen-32b',
+                'deepseek-r1-distill-qwen-14b',
+                'deepseek-r1-distill-qwen-7b',
+                'deepseek-r1-distill-qwen-1.5b',
+                // DeepSeek R1 Distill — Llama base
+                'deepseek-r1-distill-llama-70b',
+                'deepseek-r1-distill-llama-8b',
+                // DeepSeek V2 family
+                'deepseek-v2',
+                'deepseek-v2.5',
+                // Legacy
+                'deepseek-coder',
+                'deepseek-coder-v2',
+            ]
+        },
         { id: 'openai', name: 'ChatGPT (OpenAI)', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo'] },
         { id: 'anthropic', name: 'Claude (Anthropic)', models: ['claude-3-7-sonnet-20250219', 'claude-3-5-sonnet-20241022', 'claude-3-opus-20240229', 'claude-3-haiku-20240307'] },
-        { id: 'xai', name: 'xAI (Grok)', models: ['grok-beta', 'grok-2'] }
+        {
+            id: 'xai',
+            name: 'xAI (Grok)',
+            models: [
+                // Grok 4 — Latest flagship & reasoning
+                'grok-4',
+                'grok-4-0709',
+                'grok-4-1-fast-reasoning',
+                'grok-4.20-0309-reasoning',
+                // Grok 3 family
+                'grok-3',
+                'grok-3-mini',
+                'grok-3-fast',
+                'grok-3-mini-fast',
+                // Grok 2 family
+                'grok-2',
+                'grok-2-1212',
+                'grok-2-vision-1212',
+                'grok-2-mini',
+                // Legacy
+                'grok-beta',
+            ]
+        }
     ];
 
     const fetchSettings = async () => {

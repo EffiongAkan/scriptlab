@@ -27,7 +27,7 @@ export const useScriptContentState = (
   initialElements: ScriptElementType[],
   onContentChange?: () => void
 ) => {
-  const { currentElement, resetCurrentElement, focusedElementId } = useScriptEditor();
+  const { currentElement, resetCurrentElement, focusedElementId, setFocusedElementId } = useScriptEditor();
   const processedElementRef = useRef<string | null>(null);
   const { pushState, initState, elements: historyElements, lastActionType, revision } = useScriptHistory();
   const { toast } = useToast();
@@ -409,6 +409,70 @@ export const useScriptContentState = (
     });
   }, [selectedElementIds, deleteLocalElements, useLocalElements, localElements, realtimeElements, pushState, syncMultipleElementsToSupabase, onContentChange, toast]);
 
+  // Listen for bulk paste events
+  useEffect(() => {
+    const handlePasteBulk = async (e: any) => {
+      const { text, elementId } = e.detail;
+      if (!text || !elementId) return;
+
+      const elementsArray = useLocalElements ? localElements : realtimeElements || [];
+      const insertIndex = elementsArray.findIndex(el => el.id === elementId);
+      
+      if (insertIndex === -1) return;
+
+      try {
+        const { parseScriptElements } = await import('@/utils/scriptElementParser');
+        const parsed = parseScriptElements(text);
+        if (parsed.length === 0) return;
+
+        const newParsedElements = parsed.map(el => ({
+          ...el,
+          script_id: scriptId,
+        })) as ScriptElementType[];
+        
+        const updatedElements = [...elementsArray];
+        const targetElement = updatedElements[insertIndex];
+        const isEmpty = !targetElement.content || targetElement.content.trim() === '';
+        
+        if (isEmpty) {
+          updatedElements.splice(insertIndex, 1, ...newParsedElements);
+        } else {
+          updatedElements.splice(insertIndex + 1, 0, ...newParsedElements);
+        }
+
+        const reindexedElements = updatedElements.map((el, idx) => ({
+          ...el,
+          position: idx
+        }));
+
+        setAllElements(reindexedElements);
+        pushState(reindexedElements);
+        
+        blockRealtimeSync(5000);
+        await syncMultipleElementsToSupabase(reindexedElements);
+
+        if (onContentChange) onContentChange();
+
+        if (newParsedElements.length > 0) {
+          setTimeout(() => {
+            const el = document.getElementById(`script-element-${newParsedElements[0].id}`);
+            if (el) {
+              const textarea = el.querySelector('textarea, [contenteditable]');
+              if (textarea instanceof HTMLElement) {
+                textarea.focus();
+              }
+            }
+          }, 100);
+        }
+      } catch (err) {
+        console.error("Failed to parse and insert pasted elements", err);
+      }
+    };
+
+    document.addEventListener('script-paste-bulk', handlePasteBulk);
+    return () => document.removeEventListener('script-paste-bulk', handlePasteBulk);
+  }, [localElements, realtimeElements, useLocalElements, scriptId, setAllElements, pushState, blockRealtimeSync, syncMultipleElementsToSupabase, onContentChange]);
+
   return {
     localElements,
     realtimeElements,
@@ -419,6 +483,7 @@ export const useScriptContentState = (
     handleFocus,
     paperRef,
     blockRealtimeSync,
+    setAllElements, // EXPORT setAllElements to fix the snap-back
     // Selection & Batch Delete exports
     selectedElementIds,
     handleElementClick,

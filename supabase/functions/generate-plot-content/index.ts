@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, keepalive',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
@@ -86,7 +86,7 @@ serve(async (req) => {
     const { seedPlot, genre, scriptId, customSystemPrompt, promptType, characters, currentBatchPlans, scenesNumber, tone, language } = requestBody;
 
     // Build comprehensive system prompt (Restored October 2025 Logic)
-    let systemPrompt = customSystemPrompt || "You are an expert screenwriter and storyteller specializing in Nigerian and African cinema. You create engaging, culturally authentic content that resonates with African audiences while maintaining universal appeal.";
+    let systemPrompt = customSystemPrompt || "You are an expert screenwriter and storyteller specializing in Nigerian and African cinema. You create engaging, culturally authentic content that resonates with African audiences while maintaining universal appeal. CRITICAL: NO pidgin dialogues unless explicitly selected or required by the plot. NO market scenes. NO use of juju/magic. NO Nigerian proverbs.";
 
     const isPlotMapGeneration = promptType === 'plot_map';
     const isScriptGeneration = promptType === 'dialogue' || (seedPlot && seedPlot.toLowerCase().includes("create a full professional screenplay"));
@@ -122,7 +122,18 @@ ${requestBody.rollingContext}` : ''}
 IMPORTANT: You are generating EXACTLY ONE SCENE. Do not summarize. Write the full scene with dialogue. 
 At the end of your response, after the script content, add a [SUMMARY] tag and a 1-sentence recap for continuity.` : ''}
 
-SCENE LENGTH: Each scene should be substantial with rich dialogue and detailed action lines.
+SCENE LENGTH: Each scene should be substantial with rich dialogue, but action lines MUST be light and concise. DO NOT write heavy, bulky, or overly detailed action descriptions.
+
+CRITICAL FORMATTING RULES:
+1. CHARACTER INTRODUCTIONS: The first time a character appears in an action line, their name MUST be in ALL CAPS.
+2. SCENE HEADINGS: [SCENE] must ONLY contain INT. or EXT., followed by location and time. NEVER include scene numbers, episode titles, or words like "SCENE 1:". Example: [SCENE] EXT. COMPOUND - NIGHT
+3. PARENTHETICALS: [PAREN] must ALWAYS contain the actual parentheses characters '(' and ')'. NEVER omit them. Example: [PAREN] (laughing)
+
+CRITICAL INSTRUCTIONS FOR NOLLYWOOD/NIGERIAN SCRIPTS:
+1. NO pidgin dialogues unless the user explicitly selects it or the plot strictly requires it.
+2. NO market scenes.
+3. NO use of juju/magic/witchcraft.
+4. NO use of Nigerian proverbs anywhere in the script.
 
 CRITICAL: Never use markdown formatting. Use ONLY the [TAG] system above.`;
     }

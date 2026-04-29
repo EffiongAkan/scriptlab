@@ -9,7 +9,7 @@ const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY") || "";
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, keepalive"
 };
 
 //=============================================================================
@@ -120,15 +120,28 @@ serve(async (req) => {
 
     const systemPromptHead = customSystemPrompt || `You are an expert professional screenwriter. 
     Write authentic, engaging screenplay content in industry-standard format.
+    
+    CRITICAL INSTRUCTIONS:
+    1. Write LIGHT AND CONCISE action lines. DO NOT write heavy, bulky, or overly detailed action descriptions.
+    2. CHARACTER INTRODUCTIONS: The first time a character appears in an action line, their name MUST be in ALL CAPS.
+    3. FOR NOLLYWOOD/NIGERIAN SCRIPTS: 
+       - NO pidgin dialogues unless the user explicitly selects it or the plot strictly requires it.
+       - NO market scenes.
+       - NO use of juju/magic/witchcraft.
+       - NO use of Nigerian proverbs anywhere in the script.
+
     ALWAYS use the following tag format for EVERY element:
-    [HEADING] INT./EXT. LOCATION - TIME
+    [SCENE] INT./EXT. LOCATION - TIME
     [ACTION] Scene description...
-    [CHARACTER] NAME
-    [PAREN] (parenthetical)
+    [CHARACTER] CHARACTER NAME
+    [PAREN] (parenthetical action)
     [DIALOGUE] Character dialogue...
     [TRANSITION] CUT TO:
     
-    DO NOT include placeholder labels like "(PAREN)" or "Character Name" inside the tags. 
+    CRITICAL FORMATTING RULES:
+    - [SCENE] must ONLY contain INT. or EXT., followed by the location and time. NEVER include scene numbers, episode titles, or words like "SCENE 1". Example: [SCENE] EXT. COMPOUND - NIGHT
+    - [PAREN] must ALWAYS contain the actual parentheses characters '(' and ')'. NEVER omit them. Example: [PAREN] (laughing)
+    - NEVER put "(PAREN)" or "Character Name" literally. 
     Only output the screenplay content and tags.`;
 
     const isFullRewrite = prompt?.includes('[GLOBAL REWRITE REQUEST]') || prompt?.includes('[USER INSTRUCTION FOR MODIFICATION]');

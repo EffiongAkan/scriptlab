@@ -16,6 +16,11 @@ BEGIN
     v_action_type := 'editing'; -- Generic editing
     v_details := jsonb_build_object('element_type', NEW.type, 'element_id', NEW.id, 'action', 'insert');
   ELSIF (TG_OP = 'UPDATE') THEN
+    -- Skip recording activity if only position or timestamps changed (prevents bulk sync spam)
+    IF (OLD.content = NEW.content AND OLD.type = NEW.type) THEN
+      RETURN NULL;
+    END IF;
+
     v_script_id := NEW.script_id;
     v_action_type := 'editing';
     v_details := jsonb_build_object('element_type', NEW.type, 'element_id', NEW.id, 'action', 'update');

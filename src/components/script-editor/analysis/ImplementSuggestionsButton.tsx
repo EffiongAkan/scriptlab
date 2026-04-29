@@ -52,18 +52,18 @@ export const ImplementSuggestionsButton: React.FC<ImplementSuggestionsButtonProp
       .map((rec, i) => `${i + 1}. [${rec.type.toUpperCase()}] ${rec.title}: ${rec.description}`)
       .join('\n');
 
-    // Serialize the current script as plain text for context
+    // Serialize the current script as plain text for context (Fountain format approximation)
     const scriptText = elements
       .map(el => {
-        const prefix: Record<string, string> = {
-          heading: '\n## SCENE HEADING: ',
-          character: 'CHARACTER: ',
-          dialogue: 'DIALOGUE: ',
-          parenthetical: 'PARENTHETICAL: ',
-          action: 'ACTION: ',
-          transition: 'TRANSITION: ',
-        };
-        return `${prefix[el.type] ?? ''}${el.content}`;
+        if (el.type === 'heading') return `\n${el.content.toUpperCase()}`;
+        if (el.type === 'character') return `\n${el.content.toUpperCase()}`;
+        if (el.type === 'dialogue') return el.content;
+        if (el.type === 'parenthetical') {
+          const content = el.content.startsWith('(') ? el.content : `(${el.content})`;
+          return content;
+        }
+        if (el.type === 'transition') return `\n${el.content.toUpperCase()}`;
+        return `\n${el.content}`; // Action
       })
       .join('\n');
 
@@ -79,9 +79,10 @@ Your task:
 - Review ONLY the critical and improvement recommendations above.
 - Rewrite the affected portions of the script to address EVERY recommendation listed.
 - Preserve all scene heading locations, character names, act structure, and core story beats.
-- Return ONLY valid Fountain screenplay format. Do not add any explanation or commentary outside the script.
-- Each scene heading must start with INT. or EXT.
-- Character names must be ALL CAPS.
+- Return ONLY STRICT valid Fountain screenplay format. Do not add any explanation, commentary, or formatting tags (e.g. no [ACTION], [DIALOGUE], etc.).
+- Each scene heading must be on its own line and start with INT. or EXT.
+- Character names must be ALL CAPS on their own line.
+- Dialogue must be on the line immediately following the Character name.
 - Keep the tone and style consistent with the original.`;
 
     try {
@@ -104,8 +105,16 @@ Your task:
 
       // Parse the returned fountain text back into script elements
       const lines = response.content.split('\n').filter(l => l.trim());
-      const newElements: ScriptElementType[] = lines.map((line, idx) => {
-        const trimmed = line.trim();
+      const newElements: ScriptElementType[] = [];
+      
+      lines.forEach((line, idx) => {
+        let trimmed = line.trim();
+        // Fallback: strip any AI added formatting tags if it ignored instructions
+        trimmed = trimmed.replace(/^\[?(HEADING|ACTION|CHARACTER|DIALOGUE|PARENTHETICAL|TRANSITION|PAREN|SCENE HEADING)\]?\s*:?\s*/i, '');
+        trimmed = trimmed.replace(/^(SCENE HEADING|CHARACTER|DIALOGUE|PARENTHETICAL|ACTION|TRANSITION):\s*/i, '');
+        
+        if (!trimmed) return;
+
         let type: ScriptElementType['type'] = 'action';
 
         if (/^(INT\.|EXT\.|INT\/EXT\.)/i.test(trimmed)) {
@@ -116,18 +125,18 @@ Your task:
           type = 'parenthetical';
         } else if (/^(FADE IN:|FADE OUT:|CUT TO:|DISSOLVE TO:)/i.test(trimmed)) {
           type = 'transition';
-        } else if (idx > 0) {
-          const prevEl = newElements[idx - 1];
+        } else if (newElements.length > 0) {
+          const prevEl = newElements[newElements.length - 1];
           if (prevEl?.type === 'character' || prevEl?.type === 'parenthetical') {
             type = 'dialogue';
           }
         }
 
-        return {
+        newElements.push({
           id: `ai-impl-${idx}-${Date.now()}`,
           type,
           content: trimmed,
-        } as ScriptElementType;
+        } as ScriptElementType);
       });
 
       onImplemented(newElements.filter(el => el.content.trim()));

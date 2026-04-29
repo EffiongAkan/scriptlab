@@ -22,12 +22,53 @@ export const MODEL_PRICING: Record<string, ModelPricing> = {
     'gpt-4': { input: 0.03, output: 0.06 },
     'gpt-3.5-turbo': { input: 0.0005, output: 0.0015 },
 
-    // xAI models
-    'grok-beta': { input: 0.005, output: 0.015 },
+    // xAI Grok 4 models (flagship & reasoning)
+    'grok-4':                      { input: 0.003, output: 0.015 },
+    'grok-4-0709':                 { input: 0.003, output: 0.015 },
+    'grok-4-1-fast-reasoning':     { input: 0.003, output: 0.025 },
+    'grok-4.20-0309-reasoning':    { input: 0.003, output: 0.025 },
 
-    // DeepSeek models
-    'deepseek-chat': { input: 0.00014, output: 0.00028 },
-    'deepseek-coder': { input: 0.00014, output: 0.00028 }
+    // xAI Grok 3 models
+    'grok-3':                      { input: 0.003, output: 0.015 },
+    'grok-3-mini':                 { input: 0.0003, output: 0.0005 },
+    'grok-3-fast':                 { input: 0.005, output: 0.025 },
+    'grok-3-mini-fast':            { input: 0.0006, output: 0.004 },
+
+    // xAI Grok 2 models
+    'grok-2':                      { input: 0.002, output: 0.010 },
+    'grok-2-1212':                 { input: 0.002, output: 0.010 },
+    'grok-2-vision-1212':          { input: 0.002, output: 0.010 },
+    'grok-2-mini':                 { input: 0.001, output: 0.005 },
+
+    // xAI Legacy
+    'grok-beta':                   { input: 0.005, output: 0.015 },
+
+    // DeepSeek V3 (latest chat)
+    'deepseek-chat':                    { input: 0.00014, output: 0.00028 },
+    'deepseek-v3':                      { input: 0.00014, output: 0.00028 },
+
+    // DeepSeek R1 (reasoning)
+    'deepseek-reasoner':                { input: 0.00055, output: 0.00219 },
+    'deepseek-r1':                      { input: 0.00055, output: 0.00219 },
+    'deepseek-r1-zero':                 { input: 0.00055, output: 0.00219 },
+
+    // DeepSeek R1 Distill — Qwen base
+    'deepseek-r1-distill-qwen-32b':     { input: 0.00012, output: 0.00018 },
+    'deepseek-r1-distill-qwen-14b':     { input: 0.00007, output: 0.00011 },
+    'deepseek-r1-distill-qwen-7b':      { input: 0.00004, output: 0.00008 },
+    'deepseek-r1-distill-qwen-1.5b':    { input: 0.00001, output: 0.00002 },
+
+    // DeepSeek R1 Distill — Llama base
+    'deepseek-r1-distill-llama-70b':    { input: 0.00023, output: 0.00069 },
+    'deepseek-r1-distill-llama-8b':     { input: 0.00004, output: 0.00008 },
+
+    // DeepSeek V2 family
+    'deepseek-v2':                      { input: 0.00020, output: 0.00060 },
+    'deepseek-v2.5':                    { input: 0.00014, output: 0.00028 },
+
+    // Legacy coder models
+    'deepseek-coder':                   { input: 0.00014, output: 0.00028 },
+    'deepseek-coder-v2':                { input: 0.00014, output: 0.00028 },
 };
 
 /**

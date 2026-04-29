@@ -18,6 +18,11 @@ interface ScriptFormatToolbarProps {
   onChangeElementType?: (newType: string) => void;
   /** If true, the mobile type switcher will be hidden (useful when other menus are active) */
   hideMobileSwitcher?: boolean;
+  /** Pagination props */
+  currentPage?: number;
+  totalPages?: number;
+  onPrevPage?: () => void;
+  onNextPage?: () => void;
 }
 
 export const ScriptFormatToolbar = ({
@@ -29,6 +34,10 @@ export const ScriptFormatToolbar = ({
   activeElementType,
   onChangeElementType,
   hideMobileSwitcher,
+  currentPage,
+  totalPages,
+  onPrevPage,
+  onNextPage,
 }: ScriptFormatToolbarProps) => {
   const ELEMENT_TYPES = [
     { type: 'heading', label: 'H', fullLabel: 'Scene Heading' },
@@ -191,6 +200,49 @@ export const ScriptFormatToolbar = ({
               </Tooltip>
             </TooltipProvider>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages !== undefined && totalPages > 1 && (
+            <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-gray-800/40 rounded-full border border-gray-700/50">
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={onPrevPage}
+                      disabled={currentPage === 0}
+                      className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      PREV
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Previous Page</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+
+              <div className="w-[1px] h-3 bg-gray-700/50" />
+
+              <span className="text-[10px] font-mono text-gray-500 min-w-[70px] text-center">
+                {currentPage !== undefined ? currentPage + 1 : 0} / {totalPages}
+              </span>
+
+              <div className="w-[1px] h-3 bg-gray-700/50" />
+
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      onClick={onNextPage}
+                      disabled={currentPage === totalPages - 1}
+                      className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                    >
+                      NEXT
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>Next Page</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            </div>
+          )}
         </div>
 
         {/* Right section: Shortcuts & Zoom Controls (Hidden on mobile) */}

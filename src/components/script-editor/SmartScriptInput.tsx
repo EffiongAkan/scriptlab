@@ -249,6 +249,25 @@ export const SmartScriptInput = ({
       }
     }
 
+    // Handle Tab key for script element cycling (when no suggestions)
+    if (e.key === 'Tab' && !e.shiftKey && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      
+      const activeContainer = e.currentTarget.closest('[data-element-type]');
+      if (activeContainer) {
+        const elementId = activeContainer.getAttribute('data-element-id');
+        const currentType = activeContainer.getAttribute('data-element-type');
+
+        if (elementId && currentType) {
+          const formatEvent = new CustomEvent('script-format-change', {
+            detail: { id: elementId, currentType }
+          });
+          document.dispatchEvent(formatEvent);
+        }
+      }
+      return;
+    }
+
     // Handle Enter key for creating new element (when no suggestions)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -264,6 +283,25 @@ export const SmartScriptInput = ({
       onChange("");
     }
   }, [isVisible, suggestions, selectedSuggestionIndex, onEnterPress, hideSuggestions]);
+
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+
+    if (text.includes('\n')) {
+      e.preventDefault();
+      
+      const activeContainer = e.currentTarget.closest('[data-element-id]');
+      const elementId = activeContainer?.getAttribute('data-element-id');
+
+      if (elementId) {
+        const pasteEvent = new CustomEvent('script-paste-bulk', {
+          detail: { text, elementId }
+        });
+        document.dispatchEvent(pasteEvent);
+      }
+    }
+  }, []);
 
   const applySuggestion = useCallback((suggestion: any) => {
     if (!contentRef.current) return;
@@ -317,6 +355,7 @@ export const SmartScriptInput = ({
         dir="ltr"
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={handlePaste}
         onFocus={handleFocusInternal}
         onBlur={onBlur} // Pass onBlur
         className={className}

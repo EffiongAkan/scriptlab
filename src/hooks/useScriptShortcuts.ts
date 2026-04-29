@@ -119,7 +119,7 @@ export function useScriptShortcuts() {
       }
 
       // Tab for quick format switching (without modifier keys)
-      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey) {
+      if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && !e.defaultPrevented) {
         const activeElement = document.activeElement as HTMLElement;
         const activeContainer = activeElement?.closest('[data-element-id]');
         if (activeContainer) {
