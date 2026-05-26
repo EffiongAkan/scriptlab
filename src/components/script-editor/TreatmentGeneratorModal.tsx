@@ -147,7 +147,7 @@ Make it compelling, professional, and ready to be used as a pitch document.`;
                     <Textarea
                         value={treatment}
                         onChange={(e) => setTreatment(e.target.value)}
-                        placeholder="Your story treatment will appear here. Click 'Generate with AI' to let ScriptLab analyze your script and write one for you."
+                        placeholder="Your story treatment will appear here. Click 'Generate with AI' to let Scriptyn analyze your script and write one for you."
                         className="flex-1 resize-none font-sans text-sm leading-relaxed p-4 bg-[#121212] border-gray-700 text-gray-200 focus-visible:ring-naija-gold/50"
                         disabled={isGenerating}
                     />
@@ -159,12 +159,12 @@ Make it compelling, professional, and ready to be used as a pitch document.`;
                     )}
                 </div>
 
-                <div className="flex justify-between items-center mt-4 pt-4 border-t border-gray-800">
+                <div className="flex flex-col sm:flex-row justify-between items-center gap-3 mt-4 pt-4 border-t border-gray-800">
                     <Button
                         variant="outline"
                         onClick={handleGenerate}
                         disabled={isGenerating || isSaving}
-                        className="bg-transparent border-naija-gold/50 text-naija-gold hover:bg-naija-gold/10"
+                        className="bg-transparent border-naija-gold/50 text-naija-gold hover:bg-naija-gold/10 w-full sm:w-auto"
                     >
                         {isGenerating ? (
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -174,18 +174,18 @@ Make it compelling, professional, and ready to be used as a pitch document.`;
                         Generate with AI
                     </Button>
 
-                    <div className="flex gap-2">
+                    <div className="flex w-full sm:w-auto gap-2">
                         <Button
                             variant="ghost"
                             onClick={() => onOpenChange(false)}
-                            className="text-gray-400 hover:text-white"
+                            className="text-gray-400 hover:text-white flex-1 sm:flex-none"
                         >
                             Cancel
                         </Button>
                         <Button
                             onClick={handleSave}
                             disabled={isGenerating || isSaving || !treatment.trim()}
-                            className="bg-naija-green hover:bg-naija-green/90 text-white"
+                            className="bg-naija-green hover:bg-naija-green/90 text-white flex-1 sm:flex-none"
                         >
                             {isSaving ? (
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />

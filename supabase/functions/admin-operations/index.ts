@@ -869,6 +869,70 @@ serve(async (req) => {
           })
         }
 
+      case 'get_sentry_issues':
+        try {
+          const { data: adminCheck, error: adminCheckError } = await supabaseClient
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (adminCheckError || !adminCheck) {
+            return new Response(JSON.stringify({ error: 'Admin access required' }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const sentryToken = Deno.env.get('SENTRY_AUTH_TOKEN');
+          if (!sentryToken) {
+            return new Response(JSON.stringify({ error: 'SENTRY_AUTH_TOKEN is not configured. Did you pass --env-file .env?' }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const orgSlug = data.orgSlug;
+          const projectSlug = data.projectSlug;
+
+          if (!orgSlug || !projectSlug) {
+             return new Response(JSON.stringify({ error: 'Missing orgSlug or projectSlug' }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const sentryApiUrl = `https://sentry.io/api/0/projects/${orgSlug}/${projectSlug}/issues/?statsPeriod=14d&query=is:unresolved`;
+          const sentryRes = await fetch(sentryApiUrl, {
+            headers: {
+              'Authorization': `Bearer ${sentryToken}`,
+              'Content-Type': 'application/json'
+            }
+          });
+
+          if (!sentryRes.ok) {
+             const errorText = await sentryRes.text();
+             console.error('Sentry API Error:', sentryRes.status, errorText);
+             return new Response(JSON.stringify({ error: `Sentry API Error (${sentryRes.status}): ${errorText}` }), {
+              status: 200,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const issues = await sentryRes.json();
+
+          return new Response(JSON.stringify({ success: true, issues }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error fetching sentry issues:', error)
+          return new Response(JSON.stringify({ error: `Failed to fetch sentry issues: ${error.message}` }), {
+            status: 200,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
       default:
         return new Response(JSON.stringify({ error: 'Invalid operation' }), {
           status: 400,
@@ -881,7 +945,7 @@ serve(async (req) => {
       error: err.message || 'An unexpected error occurred in the Edge Function',
       details: err.stack || err
     }), {
-      status: 500,
+      status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }

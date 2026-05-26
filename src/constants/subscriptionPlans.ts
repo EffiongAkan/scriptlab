@@ -10,6 +10,7 @@ export interface SubscriptionPlan {
     limits: {
         scripts: number;
         aiCreditsPerMonth: number;
+        aiCreditsYearly?: number;
         collaborators: number;
         exports: number;
     };
@@ -40,18 +41,24 @@ export const SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         id: 'pro',
         name: 'Professional',
         description: 'For serious scriptwriters and creators',
-        monthlyPrice: 25,
-        yearlyPrice: 250,
+        monthlyPrice: 15,
+        yearlyPrice: 150,
         features: [
+            '700 AI credits / month (9,500 / year)',
             'Unlimited scripts',
-            '100 AI credits / month',
-            'Advanced export options',
-            'Real-time collaboration (up to 5)',
+            'Script generation',
+            'Analyze video (create scripts from video)',
+            'Real-time collaboration',
+            'Script Analysis',
+            'Modify script with AI',
+            'Advanced Export options',
+            'Version control',
             'Priority support',
         ],
         limits: {
             scripts: -1,
-            aiCreditsPerMonth: 100,
+            aiCreditsPerMonth: 700,
+            aiCreditsYearly: 9500,
             collaborators: 5,
             exports: -1
         },

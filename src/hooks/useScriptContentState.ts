@@ -488,6 +488,7 @@ export const useScriptContentState = (
     selectedElementIds,
     handleElementClick,
     deleteSelectedElements,
-    setSelectedElementIds // Exported for clearing on blur if needed
+    setSelectedElementIds, // Exported for clearing on blur if needed
+    pushState
   };
 };

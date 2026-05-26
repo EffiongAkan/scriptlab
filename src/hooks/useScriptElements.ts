@@ -94,39 +94,29 @@ export const useScriptElements = () => {
         }
       }
 
-      // 3. UPSERT the collected elements (updates existing, inserts new)
-      // Fix: Make sure each element has valid content and structure
-      const elementsToUpsert = elements.map((element, index) => ({
-        script_id: scriptId,
+      // 3. BULK UPSERT the collected elements
+      // We use the 'sync_script_elements_bulk' RPC because it properly defers the unique
+      // position constraint (unique_script_position) to avoid collisions during position swaps (e.g. from Undo/Redo)
+      const elementsToSync = elements.map((element, index) => ({
+        id: element.id,
         type: element.type,
-        content: element.content || '', // Ensure content is never null
-        position: index,
-        id: element.id // ID is required for upsert to work as update
+        content: element.content || '',
+        position: index
       }));
 
-      console.log('Upserting elements:', elementsToUpsert.length);
+      console.log('Bulk syncing elements:', elementsToSync.length);
 
-      // Split elements into smaller batches to avoid potential payload size limits
-      const batchSize = 100; // Can increase batch size for upserts
-      const batches = [];
+      if (elementsToSync.length > 0) {
+        const { error: syncError } = await supabase.rpc('sync_script_elements_bulk', {
+          p_script_id: scriptId,
+          p_elements: elementsToSync
+        });
 
-      for (let i = 0; i < elementsToUpsert.length; i += batchSize) {
-        batches.push(elementsToUpsert.slice(i, i + batchSize));
-      }
-
-      // Upsert elements in batches
-      for (let i = 0; i < batches.length; i++) {
-        const batch = batches[i];
-
-        const { error: upsertError } = await supabase
-          .from('script_elements')
-          .upsert(batch, { onConflict: 'id' }); // Important: Upsert based on ID
-
-        if (upsertError) {
-          console.error('Error upserting elements in batch:', upsertError);
+        if (syncError) {
+          console.error('Error during bulk sync:', syncError);
           toast({
             title: "Error",
-            description: `Failed to save script elements batch ${i + 1}: ${upsertError.message}`,
+            description: `Failed to save script elements: ${syncError.message}`,
             variant: "destructive",
           });
           return false;

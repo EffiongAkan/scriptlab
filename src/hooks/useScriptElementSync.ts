@@ -3,6 +3,7 @@ import { useRef } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { ScriptElementType } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
+import { db } from "@/db/offline-db";
 
 export const useScriptElementSync = (scriptId: string, onContentChange?: () => void) => {
   const syncErrorCountRef = useRef(0);
@@ -114,19 +115,18 @@ export const useScriptElementSync = (scriptId: string, onContentChange?: () => v
             variant: "destructive"
           });
 
-          // Store content in localStorage as backup
+          // Store content in IndexedDB as backup (avoiding localStorage quota)
           try {
-            const existingBackup = localStorage.getItem(`scriptBackup_${scriptId}`) || '[]';
-            const backupElements = JSON.parse(existingBackup);
-
-            // Add element to backup if not already there
-            if (!backupElements.some((e: any) => e.id === element.id)) {
-              backupElements.push(element);
-              localStorage.setItem(`scriptBackup_${scriptId}`, JSON.stringify(backupElements));
-              console.log('Element backed up to localStorage');
-            }
+            const timestamp = new Date().toISOString();
+            db.script_elements.put({
+              ...element,
+              script_id: scriptId,
+              updated_at: timestamp,
+              syncStatus: 'pending'
+            });
+            console.log('Element backed up to IndexedDB');
           } catch (e) {
-            console.error('Failed to backup script to localStorage:', e);
+            console.error('Failed to backup script to IndexedDB:', e);
           }
         } else {
           toast({

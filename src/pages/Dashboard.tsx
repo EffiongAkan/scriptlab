@@ -14,6 +14,7 @@ import { SynopsisCard } from "@/components/dashboard/SynopsisCard";
 import { CharacterCardLite } from "@/components/dashboard/CharacterCardLite";
 import { fetchUserSynopses } from "@/services/synopsis-service";
 import { fetchUserSavedCharacters } from "@/services/character-save-service";
+import { cacheUserScriptsOffline } from "@/services/offline-cache-service";
 import { ScriptCreationDialog } from "@/components/common/ScriptCreationDialog";
 import { ScriptUploadDialog } from "@/components/dashboard/ScriptUploadDialog";
 import { UserProfileCard } from "@/components/dashboard/UserProfileCard";
@@ -100,10 +101,18 @@ export default function Dashboard() {
           });
         } else if (scriptsData) {
           setScripts(scriptsData as DashboardScript[]);
+          
+          // Update stats
           setScriptStats(prev => ({
             ...prev,
-            totalScripts: scriptsData.length
+            totalScripts: scriptsData?.length || 0,
           }));
+
+          // Trigger background offline caching of scripts
+          setTimeout(() => {
+            cacheUserScriptsOffline(user.id);
+          }, 2000); // Wait 2 seconds to not block initial render
+
         }
 
         // Fetch character count - fix: use .in() with array of script IDs

@@ -49,13 +49,17 @@ serve(async (req) => {
     const origin = req.headers.get('origin') || 'http://localhost:8080'
     const totalCredits = credits + (bonus || 0)
 
-    // Calculate price based on base credits (excluding bonus). $0.10 per credit.
-    // Paystack takes amounts in cents. $0.10 = 10 cents per credit.
-    const amountInCents = credits * 10
+    // --- DETERMINE PRICE ---
+    let amountInCents = credits * 10 // default $0.10 per credit for custom amounts
+    
+    if (packageId === 'small') amountInCents = 300 // $3.00
+    else if (packageId === 'medium') amountInCents = 500 // $5.00
+    else if (packageId === 'large') amountInCents = 1000 // $10.00
+    else if (packageId === 'xl') amountInCents = 2000 // $20.00
 
     // --- CONVERT USD TO NGN ---
-    // Exchange rate assumption: 1 USD = 1500 NGN
-    const exchangeRate = 1500
+    // Update: 1 USD = 1380 NGN
+    const exchangeRate = 1380
     const amountInDollars = amountInCents / 100
     const amountInKobo = Math.round(amountInDollars * exchangeRate * 100)
 

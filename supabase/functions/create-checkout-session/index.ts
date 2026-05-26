@@ -9,9 +9,9 @@ const corsHeaders = {
 }
 
 // Fallback prices in USD cents in case the DB lookup fails
-// Pro: $25/mo, $250/yr | Enterprise: $55/mo, $550/yr
+// Pro: $15/mo, $150/yr | Enterprise: $55/mo, $550/yr
 const FALLBACK_PRICES: Record<string, { month: number; year: number }> = {
-  pro: { month: 2500, year: 25000 },        // $25/mo, $250/yr
+  pro: { month: 1500, year: 15000 },        // $15/mo, $150/yr
   enterprise: { month: 5500, year: 55000 }, // $55/mo, $550/yr
 }
 
@@ -93,13 +93,10 @@ serve(async (req) => {
     }
 
     // --- CONVERT USD TO NGN ---
-    // Exchange rate assumption: 1 USD = 1500 NGN
-    // amountInCents is e.g. 2500 ($25.00). In dollars that is 25.
-    // 25 * 1500 = 37,500 NGN.
-    // Paystack takes Kobo, so multiply by 100 -> 3,750,000 Kobo.
-    const exchangeRate = 1500
+    // Update: 1 USD = 1380 NGN
+    const exchangeRate = 1380
     const amountInDollars = amountInCents / 100
-    const amountInKobo = Math.round(amountInDollars * exchangeRate * 100)
+    let amountInKobo = Math.round(amountInDollars * exchangeRate * 100)
 
     // Generate a unique reference
     const reference = `sub_${user.id.substring(0, 8)}_${tier}_${interval}_${Date.now()}`

@@ -114,6 +114,10 @@ export const DetailedUserCard: React.FC<DetailedUserCardProps> = ({
             <Calendar className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="truncate text-nowrap">Joined {new Date(user.created_at).toLocaleDateString()}</span>
           </div>
+          <div className="flex items-center gap-2 min-w-0">
+            <Activity className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="truncate text-nowrap">Last Active: {user.activity?.last_active ? new Date(user.activity.last_active).toLocaleString() : 'Never'}</span>
+          </div>
         </div>
 
         {/* Subscription Info */}

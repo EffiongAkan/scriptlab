@@ -1,5 +1,12 @@
 import { supabase } from "@/integrations/supabase/client";
 import { deductAICredits } from "@/hooks/useAICredits";
+import { ClientRateLimiter } from "@/utils/rateLimiter";
+
+// Limit to 10 AI requests per minute
+const aiRateLimiter = new ClientRateLimiter('ai_requests', {
+  maxRequests: 10,
+  timeWindowMs: 60000 
+});
 
 // Types for AI requests and responses
 export interface AIRequest {
@@ -46,6 +53,16 @@ export interface AIResponse {
 export const generateAIContent = async (request: AIRequest): Promise<AIResponse> => {
   try {
     console.log(`Requesting AI content for ${request.feature}`, request);
+
+    // Apply Rate Limiting
+    if (!aiRateLimiter.checkAndRecord()) {
+      return {
+        content: '',
+        success: false,
+        error: "Too many AI requests. Please wait a minute before trying again.",
+        errorType: 'service'
+      };
+    }
 
     if (!request.skipCreditDeduction) {
       // Default to 3 for analysis, 1 for small requests, or use explicit cost

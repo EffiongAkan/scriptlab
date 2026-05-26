@@ -57,11 +57,9 @@ export function AppSidebar() {
 
   return (
     <div className={cn("flex flex-col h-full border-r bg-card", isCollapsed ? "w-16" : "w-64")}>
-      <div className="p-4 flex items-center gap-3">
-        <div className="bg-white p-1 rounded-md flex items-center justify-center flex-shrink-0">
-          <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-6 w-auto min-w-[24px]" />
-        </div>
-        {!isCollapsed && <span className="font-bold text-lg text-primary">ScriptLab</span>}
+      <div className="p-4 flex items-center gap-3 transition-transform hover:scale-[1.02] cursor-default">
+        <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-8 w-auto min-w-[32px] drop-shadow-sm" />
+        {!isCollapsed && <span className="font-extrabold text-xl tracking-tighter text-primary">Scriptyn</span>}
       </div>
 
       <div className="px-4 pb-2">

@@ -2,7 +2,7 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Play, Sparkles, CheckCircle2 } from "lucide-react";
+import { Play, Sparkles, CheckCircle2, Youtube } from "lucide-react";
 
 export const LandingHero: React.FC = () => {
     return (
@@ -31,11 +31,12 @@ export const LandingHero: React.FC = () => {
                     </div>
 
                     <h1 className="text-5xl md:text-7xl font-bold text-white leading-[1.1] mb-6">
-                        The AI Screenwriting Studio for the <span className="bg-gradient-to-r from-naija-green to-naija-gold bg-clip-text text-transparent">Global Film Industry</span>
+                        Write Faster. Create Better.<br/>
+                        <span className="bg-gradient-to-r from-naija-green to-naija-gold bg-clip-text text-transparent">AI for Screenwriters.</span>
                     </h1>
 
                     <p className="text-xl text-gray-400 mb-10 max-w-xl leading-relaxed">
-                        From idea to production-ready screenplay — with AI that understands structure, tracks continuity, and formats to industry standards.
+                        From a raw idea or a YouTube video to a production-ready screenplay. Let our intelligent AI handle the structure, continuity, and formatting while you focus on the story.
                     </p>
 
                     <div className="flex flex-col sm:flex-row gap-4 mb-8">
@@ -48,10 +49,11 @@ export const LandingHero: React.FC = () => {
                         <Button
                             asChild
                             variant="outline"
-                            className="border-white/20 bg-white/5 hover:bg-white/10 text-white font-bold h-14 px-8 rounded-xl text-lg backdrop-blur-sm transition-all hover:border-naija-gold/50"
+                            className="border-white/20 bg-white/5 hover:bg-white/10 text-white font-bold h-14 px-8 rounded-xl text-lg backdrop-blur-sm transition-all hover:border-[#ff0000]/50 hover:text-[#ff0000] group"
                         >
-                            <Link to="/auth" className="flex items-center gap-2">
-                                Generate a Film Concept
+                            <Link to="/auth?action=youtube" className="flex items-center gap-2">
+                                <Youtube className="h-5 w-5 text-gray-400 group-hover:text-[#ff0000] transition-colors" />
+                                Convert YouTube to Script
                             </Link>
                         </Button>
                     </div>
@@ -76,11 +78,18 @@ export const LandingHero: React.FC = () => {
                 <div className="relative order-first lg:order-last">
                     <div className="relative z-10 animate-float translate-y-[-20px]">
                         <div className="absolute -inset-4 bg-gradient-to-r from-naija-green/20 to-naija-gold/20 blur-3xl rounded-[2rem] opacity-50" />
-                        <img
-                            src="/landing/editor-mockup.png"
-                            alt="ScriptLab Editor Mockup"
-                            className="relative rounded-2xl border border-white/10 shadow-2xl shadow-black"
-                        />
+                        <div className="relative rounded-2xl border border-white/10 shadow-2xl shadow-black overflow-hidden aspect-video bg-black">
+                            <iframe 
+                                width="100%" 
+                                height="100%" 
+                                src="https://www.youtube.com/embed/s052uqIewhw?autoplay=0&controls=1" 
+                                title="Scriptyn Onboarding Video" 
+                                frameBorder="0" 
+                                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                allowFullScreen
+                                className="absolute inset-0 w-full h-full"
+                            ></iframe>
+                        </div>
 
                         {/* Floating Tags */}
                         <div className="absolute -top-4 md:-top-6 left-6 md:left-12 bg-black/60 backdrop-blur-md border border-white/20 rounded-lg px-4 py-2 flex items-center gap-3 animate-float-delayed shadow-xl z-20">

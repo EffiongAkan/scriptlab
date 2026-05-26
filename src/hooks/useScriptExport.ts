@@ -152,16 +152,16 @@ export const useScriptExport = () => {
       });
 
       // Set courier font for screenplay standard
-      doc.setFont("courier");
+      doc.setFont("Courier");
       doc.setFontSize(12);
 
       // Add title page
       doc.setFontSize(16);
-      doc.setFont("courier", "bold");
+      doc.setFont("Courier", "bold");
       doc.text(title.toUpperCase(), 4.25, 3, { align: "center" });
 
       doc.setFontSize(12);
-      doc.setFont("courier", "normal");
+      doc.setFont("Courier", "normal");
       doc.text("Written by", 4.25, 4, { align: "center" });
       doc.text(authorName, 4.25, 4.5, { align: "center" });
 
@@ -183,30 +183,92 @@ export const useScriptExport = () => {
 
       // Add new page for script content
       doc.addPage();
+      
+      // Page 1 number
+      doc.setFont("Courier", "normal");
+      doc.setFontSize(12);
+      doc.text("1.", 7.5, 0.5);
 
       const validElements = elements.filter(el => el && el.content && el.content.trim() !== '');
       let yPosition = 1;
-      const pageHeight = 10.5; // Letter size minus margins
-      const lineHeight = 0.2;
+      const bottomMargin = 10; // Letter size (11) minus 1 inch bottom margin
+      // True 12pt Courier line height: 12pt = 1/6 inch = 0.1667in
+      const lineHeight = 0.1667;
       let sceneCount = 0;
+      let pageNumber = 1;
 
-      validElements.forEach(element => {
-        if (yPosition > pageHeight) {
-          doc.addPage();
-          yPosition = 1;
-        }
-
+      validElements.forEach((element, index) => {
         const content = element.content.trim();
         let xPosition = 1;
         let fontSize = 12;
+        let spaceBefore = 0;
+
+        // Determine space before this element based on type and previous element
+        if (index > 0) {
+          const prevType = validElements[index - 1].type;
+          
+          if (element.type === 'heading') {
+            spaceBefore = lineHeight * 2; // Double space before heading
+          } else if (element.type === 'character') {
+            // Increase space before character if it follows an action line
+            if (prevType === 'action') {
+              spaceBefore = lineHeight * 2; // Doubled space
+            } else {
+              spaceBefore = lineHeight; 
+            }
+          } else if (element.type === 'action') {
+             // Increase space before action if it follows dialogue
+            if (prevType === 'dialogue') {
+              spaceBefore = lineHeight * 2; // Doubled space
+            } else {
+              spaceBefore = lineHeight;
+            }
+          } else if (element.type === 'transition') {
+            spaceBefore = lineHeight * 2;
+          } else if (element.type === 'dialogue' || element.type === 'parenthetical') {
+            // Dialogue follows Character or Parenthetical with 0 blank lines
+            spaceBefore = 0; 
+          }
+        }
+
+        // Define specific widths for element types to ensure proper right margins
+        let maxWidth = 6.5; // Default width (Action)
+        switch (element.type) {
+          case 'dialogue': maxWidth = 3.5; break;
+          case 'parenthetical': maxWidth = 2.5; break;
+          case 'character': maxWidth = 4.0; break;
+          case 'transition': maxWidth = 2.0; break;
+          case 'action':
+          case 'heading':
+          default: maxWidth = 6.5; break;
+        }
+
+        const splitText = doc.splitTextToSize(content, maxWidth);
+        
+        // Orphan prevention: If it's a heading or character, ensure we have enough room for at least 2 more lines below it
+        const extraRoomNeeded = (element.type === 'heading' || element.type === 'character') ? (lineHeight * 3) : 0;
+        
+        // Check if we need to page break before printing
+        if (yPosition + spaceBefore + (splitText.length * lineHeight) + extraRoomNeeded > bottomMargin) {
+          doc.addPage();
+          pageNumber++;
+          yPosition = 1; // Reset to top margin
+          spaceBefore = 0; // Don't add space at the top of a new page
+          
+          // Print page number immediately
+          doc.setFont("Courier", "normal");
+          doc.setFontSize(12);
+          doc.text(`${pageNumber}.`, 7.5, 0.5);
+        }
+
+        yPosition += spaceBefore;
 
         doc.setFontSize(fontSize);
 
         switch (element.type) {
           case 'heading':
-            doc.setFont("courier", "bold");
+            doc.setFont("Courier", "bold");
             xPosition = 1;
-            yPosition += 0.3;
             sceneCount++;
             // Draw scene numbers on both sides
             doc.setFontSize(10);
@@ -215,55 +277,31 @@ export const useScriptExport = () => {
             doc.setFontSize(fontSize);
             break;
           case 'action':
-            doc.setFont("courier", "normal");
+            doc.setFont("Courier", "normal");
             xPosition = 1;
             break;
           case 'character':
-            doc.setFont("courier", "bold");
+            doc.setFont("Courier", "bold");
             xPosition = 3.7;
-            yPosition += 0.2;
             break;
           case 'dialogue':
-            doc.setFont("courier", "normal");
+            doc.setFont("Courier", "normal");
             xPosition = 2.5;
             break;
           case 'parenthetical':
-            doc.setFont("courier", "italic");
+            doc.setFont("Courier", "italic");
             xPosition = 3.2;
             break;
           case 'transition':
-            doc.setFont("courier", "bold");
+            doc.setFont("Courier", "bold");
             xPosition = 6;
-            yPosition += 0.2;
             break;
         }
 
-        // Define specific widths for element types to ensure proper right margins
-        let maxWidth = 6.5; // Default width (Action)
-
-        switch (element.type) {
-          case 'dialogue':
-            maxWidth = 3.5; // Tighter dialogue width standard
-            break;
-          case 'parenthetical':
-            maxWidth = 2.5;
-            break;
-          case 'character':
-            maxWidth = 4.0;
-            break;
-          case 'transition':
-            maxWidth = 2.0;
-            break;
-          case 'action':
-          case 'heading':
-          default:
-            maxWidth = 6.5;
-            break;
-        }
-
-        const splitText = doc.splitTextToSize(content, maxWidth);
         doc.text(splitText, xPosition, yPosition);
-        yPosition += splitText.length * lineHeight + 0.1;
+        
+        // Advance yPosition by the height of the text printed
+        yPosition += splitText.length * lineHeight;
       });
 
       const safeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
@@ -357,6 +395,93 @@ export const useScriptExport = () => {
     }
   };
 
+  // Export as FDX
+  const exportAsFDX = async (title: string, elements: ScriptElementType[], authorName: string = '[Author Name]') => {
+    try {
+      const validation = validateScriptContent(elements);
+      if (!validation.isValid) {
+        toast({
+          title: "Export Failed",
+          description: validation.message,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      const escapeXml = (text: string) => {
+        return text
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#39;');
+      };
+
+      let fdxContent = `<?xml version="1.0" encoding="UTF-8"?>\n`;
+      fdxContent += `<FinalDraft DocumentType="Script" Template="No" Version="1">\n`;
+      fdxContent += `<Content>\n`;
+
+      // Title as first heading
+      fdxContent += `<Paragraph Type="Scene Heading">\n<Text>${escapeXml(title)}</Text>\n</Paragraph>\n`;
+
+      const validElements = elements.filter(el => el && el.content && el.content.trim() !== '');
+
+      validElements.forEach(element => {
+        const content = element.content.trim();
+
+        let fdxType = 'Action';
+        switch (element.type) {
+          case 'heading':
+            fdxType = 'Scene Heading';
+            break;
+          case 'character':
+            fdxType = 'Character';
+            break;
+          case 'dialogue':
+            fdxType = 'Dialogue';
+            break;
+          case 'parenthetical':
+            fdxType = 'Parenthetical';
+            break;
+          case 'action':
+            fdxType = 'Action';
+            break;
+          case 'transition':
+            fdxType = 'Transition';
+            break;
+        }
+
+        fdxContent += `<Paragraph Type="${fdxType}">\n<Text>${escapeXml(content)}</Text>\n</Paragraph>\n`;
+      });
+
+      fdxContent += `</Content>\n</FinalDraft>`;
+
+      const safeTitle = title.replace(/[^a-z0-9]/gi, '-').toLowerCase();
+      const blob = new Blob([fdxContent], { type: 'application/xml' });
+      const url = window.URL.createObjectURL(blob);
+
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${safeTitle || 'untitled-script'}.fdx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Export Successful",
+        description: `Script exported as ${safeTitle}.fdx`,
+      });
+    } catch (error) {
+      console.error("Error exporting as FDX:", error);
+      toast({
+        title: "Export Failed",
+        description: `Could not export script: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        variant: "destructive"
+      });
+    }
+  };
+
   // Import from Fountain (enhanced)
   const importFromFountain = (fountainText: string): { title: string, elements: Partial<ScriptElementType>[] } => {
     let title = "Untitled Screenplay";
@@ -441,6 +566,7 @@ export const useScriptExport = () => {
     exportAsTXT,
     exportAsPDF,
     exportAsFountain,
+    exportAsFDX,
     importFromFountain,
     validateScriptContent
   };

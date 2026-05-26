@@ -2,6 +2,11 @@ import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useScriptAutoComplete } from '@/hooks/useScriptAutoComplete';
 import { AutoCompleteDropdown } from './AutoCompleteDropdown';
 import { ScriptElementType } from '@/hooks/useScriptContent';
+import { useAutoCorrect } from '@/hooks/useAutoCorrect';
+import { AutoCorrectUndoPill } from './AutoCorrectUndoPill';
+import { ScriptAutocorrectBubble } from './ScriptAutocorrectBubble';
+import { useScriptEditor } from '@/contexts/ScriptEditorContext';
+import { useCollaborativeCursor } from '@/hooks/useCollaborativeCursor';
 
 interface SmartScriptInputProps {
   value: string;
@@ -13,9 +18,10 @@ interface SmartScriptInputProps {
   elementType: ScriptElementType['type'];
   scriptElements: ScriptElementType[];
   className?: string;
+  id?: string;
 }
 
-// Helper function to save cursor position
+// Helper function to save cursor position (cross-browser robust)
 const saveCursorPosition = (element: HTMLElement): number => {
   const selection = window.getSelection();
   if (!selection || selection.rangeCount === 0) return 0;
@@ -23,27 +29,31 @@ const saveCursorPosition = (element: HTMLElement): number => {
   const range = selection.getRangeAt(0);
   const preCaretRange = range.cloneRange();
   preCaretRange.selectNodeContents(element);
-  preCaretRange.setEnd(range.endContainer, range.endOffset);
-  return preCaretRange.toString().length;
+  
+  try {
+    preCaretRange.setEnd(range.endContainer, range.endOffset);
+    // Use innerText for more consistent character counting across browsers
+    // but fall back to textContent if innerText is not exactly what we need
+    return preCaretRange.toString().length;
+  } catch (e) {
+    return 0;
+  }
 };
 
-// Helper function to restore cursor position
+// Helper function to restore cursor position (cross-browser robust)
 const restoreCursorPosition = (element: HTMLElement, position: number) => {
   const selection = window.getSelection();
   if (!selection) return;
 
   let charCount = 0;
-  let foundPosition = false;
+  const range = document.createRange();
 
   const traverseNodes = (node: Node): boolean => {
     if (node.nodeType === Node.TEXT_NODE) {
       const textLength = node.textContent?.length || 0;
       if (charCount + textLength >= position) {
-        const range = document.createRange();
-        range.setStart(node, Math.min(position - charCount, textLength));
+        range.setStart(node, Math.max(0, position - charCount));
         range.collapse(true);
-        selection.removeAllRanges();
-        selection.addRange(range);
         return true;
       }
       charCount += textLength;
@@ -51,11 +61,24 @@ const restoreCursorPosition = (element: HTMLElement, position: number) => {
       for (let i = 0; i < node.childNodes.length; i++) {
         if (traverseNodes(node.childNodes[i])) return true;
       }
+      // Handle empty elements or <br> as having 0 length but valid positions
+      if (node.nodeName === 'BR' && charCount === position) {
+          range.setStartAfter(node);
+          range.collapse(true);
+          return true;
+      }
     }
     return false;
   };
 
   traverseNodes(element);
+  
+  try {
+    selection.removeAllRanges();
+    selection.addRange(range);
+  } catch (e) {
+    console.warn('[SmartScriptInput] Failed to restore selection:', e);
+  }
 };
 
 export const SmartScriptInput = ({
@@ -67,8 +90,11 @@ export const SmartScriptInput = ({
   placeholder,
   elementType,
   scriptElements,
-  className
+  className,
+  id
 }: SmartScriptInputProps) => {
+  const { focusedElementId, setFocusedElementId } = useScriptEditor();
+  const { updateSelectionPosition } = useCollaborativeCursor();
   const [selectedSuggestionIndex, setSelectedSuggestionIndex] = useState(0);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0 });
   const contentRef = useRef<HTMLDivElement>(null);
@@ -83,6 +109,19 @@ export const SmartScriptInput = ({
     showSuggestions,
     hideSuggestions
   } = useScriptAutoComplete(scriptElements);
+
+  const { autoCorrectText, getSuggestion, isEnabled } = useAutoCorrect(scriptElements);
+  const [lastCorrection, setLastCorrection] = useState<{
+    original: string;
+    corrected: string;
+    position: { top: number; left: number };
+  } | null>(null);
+
+  const [pendingSuggestion, setPendingSuggestion] = useState<{
+    original: string;
+    suggestion: string;
+    position: { top: number; left: number };
+  } | null>(null);
 
   // Initialize content on mount
   useEffect(() => {
@@ -128,7 +167,8 @@ export const SmartScriptInput = ({
   // Handle case transformations (Uppercase/Lowercase)
   useEffect(() => {
     const handleTransformCase = (event: any) => {
-      if (document.activeElement !== contentRef.current) return;
+      // Use focusedElementId check instead of document.activeElement
+      if (id !== focusedElementId) return;
 
       const { mode } = event.detail;
       const selection = window.getSelection();
@@ -141,7 +181,9 @@ export const SmartScriptInput = ({
 
       const transformedText = mode === 'uppercase'
         ? selectedText.toUpperCase()
-        : selectedText.toLowerCase();
+        : mode === 'lowercase'
+        ? selectedText.toLowerCase()
+        : selectedText.charAt(0).toUpperCase() + selectedText.slice(1).toLowerCase();
 
       // Delete the current selection and insert the transformed text
       range.deleteContents();
@@ -188,7 +230,98 @@ export const SmartScriptInput = ({
   }, []);
 
   const handleInput = useCallback((e: React.FormEvent<HTMLDivElement>) => {
-    const newValue = e.currentTarget.textContent || '';
+    let newValue = (e.currentTarget.textContent || '').replace(/\u00A0/g, ' ');
+    
+    // Save current cursor before updating
+    let cursorPos = saveCursorPosition(e.currentTarget);
+    
+    // Proactive Suggestion Logic
+    if (cursorPos > 0 && isEnabled) {
+      const currentContent = newValue;
+      const beforeCursor = currentContent.slice(0, cursorPos);
+      const match = beforeCursor.match(/(\w+)$/);
+      
+      if (match) {
+        const currentWord = match[1];
+        const lastChar = newValue.charAt(cursorPos - 1);
+        
+        // If they just typed a non-word char, we might trigger the instant replace
+        if (/[\s.,!?]/.test(lastChar)) {
+          const textUpToCursor = newValue.slice(0, cursorPos - 1);
+          const { corrected, correction } = autoCorrectText(textUpToCursor, lastChar, elementType);
+          
+          if (correction && corrected !== textUpToCursor + lastChar) {
+            const fullCorrected = corrected + newValue.slice(cursorPos);
+            
+            let pillPos = { top: 0, left: 0 };
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0 && contentRef.current) {
+               const rect = selection.getRangeAt(0).getBoundingClientRect();
+               const parentRect = contentRef.current.getBoundingClientRect();
+               pillPos = {
+                  top: rect.bottom - parentRect.top,
+                  left: rect.left - parentRect.left
+               };
+            }
+
+            e.currentTarget.textContent = fullCorrected;
+            const lengthDiff = correction.corrected.length - correction.original.length;
+            cursorPos = cursorPos + lengthDiff;
+            restoreCursorPosition(e.currentTarget, cursorPos);
+            
+            newValue = fullCorrected;
+            setPendingSuggestion(null); // Clear pending if we auto-replaced
+            
+            setLastCorrection({
+              original: correction.original,
+              corrected: correction.corrected,
+              position: pillPos
+            });
+          } else {
+            setPendingSuggestion(null);
+          }
+        } else if (currentWord.length >= 2) {
+          // Check for proactive suggestion
+          const suggestion = getSuggestion(currentWord, elementType);
+          if (suggestion && suggestion.toLowerCase() !== currentWord.toLowerCase()) {
+            // Calculate position
+            const selection = window.getSelection();
+            if (selection && selection.rangeCount > 0 && contentRef.current) {
+              const range = selection.getRangeAt(0).cloneRange();
+              let rect = range.getBoundingClientRect();
+              
+              // If rect is empty (at line start), try to get from selection
+              if (rect.width === 0 && rect.height === 0) {
+                const sel = window.getSelection();
+                if (sel && sel.rangeCount > 0) {
+                  rect = sel.getRangeAt(0).getBoundingClientRect();
+                }
+              }
+
+              const parentRect = contentRef.current.getBoundingClientRect();
+              
+              setPendingSuggestion({
+                original: currentWord,
+                suggestion: suggestion,
+                position: {
+                  top: rect.top - parentRect.top,
+                  left: rect.left - parentRect.left
+                }
+              });
+            }
+          } else {
+            setPendingSuggestion(null);
+          }
+        }
+ else {
+          setPendingSuggestion(null);
+        }
+      } else {
+        setPendingSuggestion(null);
+      }
+    } else {
+      setPendingSuggestion(null);
+    }
 
     // Mark user as actively typing
     isTypingRef.current = true;
@@ -203,9 +336,20 @@ export const SmartScriptInput = ({
       isTypingRef.current = false;
     }, 500);
 
-    // Mark this as an internal change to prevent the useEffect from syncing
-    isInternalChangeRef.current = true;
-    onChange(newValue);
+    // Only update and trigger onChange if value actually changed
+    // OR if this was triggered internally (e.g. by auto-correct)
+    if (newValue !== lastValueRef.current || isInternalChangeRef.current) {
+      // IF this was an internal change, we already updated the DOM, so we just
+      // reset the flag and update the lastValueRef
+      if (isInternalChangeRef.current) {
+        isInternalChangeRef.current = false;
+        lastValueRef.current = newValue;
+        return;
+      }
+
+      lastValueRef.current = newValue;
+      onChange(newValue);
+    }
 
     // Show suggestions based on current input
     if (newValue.trim()) {
@@ -216,7 +360,12 @@ export const SmartScriptInput = ({
     } else {
       hideSuggestions();
     }
-  }, [onChange, elementType, showSuggestions, hideSuggestions, updateDropdownPosition]);
+    
+    // Broadcast cursor position during typing
+    if (id) {
+        updateSelectionPosition(id);
+    }
+  }, [onChange, elementType, showSuggestions, hideSuggestions, updateDropdownPosition, autoCorrectText, id, updateSelectionPosition]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
     // Handle autocomplete suggestions first
@@ -245,8 +394,16 @@ export const SmartScriptInput = ({
         case 'Escape':
           e.preventDefault();
           hideSuggestions();
+          setPendingSuggestion(null);
           return;
       }
+    }
+
+    // Handle proactive suggestion acceptance on Space/Enter
+    if (pendingSuggestion && (e.key === ' ' || e.key === 'Enter')) {
+      e.preventDefault();
+      applyPendingSuggestion();
+      return;
     }
 
     // Handle Tab key for script element cycling (when no suggestions)
@@ -271,6 +428,18 @@ export const SmartScriptInput = ({
     // Handle Enter key for creating new element (when no suggestions)
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
+      
+      // Attempt auto-correction before moving to next element
+      const currentValue = (contentRef.current?.textContent || '').replace(/\u00A0/g, ' ');
+      if (currentValue.trim()) {
+        const { corrected, correction } = autoCorrectText(currentValue, '', elementType);
+        if (correction) {
+          isInternalChangeRef.current = true;
+          if (contentRef.current) contentRef.current.textContent = corrected;
+          onChange(corrected);
+        }
+      }
+
       if (onEnterPress) {
         onEnterPress();
       }
@@ -282,7 +451,7 @@ export const SmartScriptInput = ({
       // This will be caught by the parent's handleContentChange as a deletion request
       onChange("");
     }
-  }, [isVisible, suggestions, selectedSuggestionIndex, onEnterPress, hideSuggestions]);
+  }, [isVisible, suggestions, selectedSuggestionIndex, onEnterPress, hideSuggestions, autoCorrectText, elementType, onChange, value]);
 
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLDivElement>) => {
     const text = e.clipboardData.getData('text/plain');
@@ -337,15 +506,74 @@ export const SmartScriptInput = ({
     }, 0);
   }, [onChange, hideSuggestions]);
 
+  const applyPendingSuggestion = useCallback(() => {
+    if (!pendingSuggestion || !contentRef.current) return;
+
+    const currentText = contentRef.current.textContent || '';
+    const cursorPos = saveCursorPosition(contentRef.current);
+    const beforeCursor = currentText.slice(0, cursorPos);
+    const afterCursor = currentText.slice(cursorPos);
+    
+    // Find the word to replace
+    const match = beforeCursor.match(/(\w+)$/);
+    if (match) {
+      const originalWord = match[1];
+      const newBeforeCursor = beforeCursor.slice(0, -originalWord.length) + pendingSuggestion.suggestion;
+      const newText = newBeforeCursor + afterCursor;
+      
+      contentRef.current.textContent = newText;
+      
+      const lengthDiff = pendingSuggestion.suggestion.length - originalWord.length;
+      restoreCursorPosition(contentRef.current, cursorPos + lengthDiff);
+      
+      isInternalChangeRef.current = true;
+      lastValueRef.current = newText;
+      onChange(newText);
+      
+      setLastCorrection({
+        original: originalWord,
+        corrected: pendingSuggestion.suggestion,
+        position: pendingSuggestion.position
+      });
+    }
+    
+    setPendingSuggestion(null);
+  }, [pendingSuggestion, onChange]);
+
   const handleFocusInternal = useCallback((e: React.FocusEvent<HTMLDivElement>) => {
+    if (id) setFocusedElementId(id);
     updateDropdownPosition();
     if (onFocus) onFocus();
-  }, [onFocus, updateDropdownPosition]);
+  }, [id, onFocus, updateDropdownPosition, setFocusedElementId]);
 
   // Reset suggestion index when suggestions change
   useEffect(() => {
     setSelectedSuggestionIndex(0);
   }, [suggestions]);
+
+  const handleUndoCorrection = useCallback(() => {
+      if (!lastCorrection || !contentRef.current) return;
+      
+      const currentText = contentRef.current.textContent || '';
+      // We need to replace the last occurrence of the corrected word with the original word.
+      // But it's safer to just look backwards from the cursor if possible, or simple replace last match.
+      const cursorPos = saveCursorPosition(contentRef.current);
+      
+      // Simple backwards replace: we know the corrected word was just typed
+      const lastIndex = currentText.lastIndexOf(lastCorrection.corrected);
+      if (lastIndex !== -1) {
+          const newText = currentText.substring(0, lastIndex) + lastCorrection.original + currentText.substring(lastIndex + lastCorrection.corrected.length);
+          contentRef.current.textContent = newText;
+          
+          const lengthDiff = lastCorrection.original.length - lastCorrection.corrected.length;
+          restoreCursorPosition(contentRef.current, cursorPos + lengthDiff);
+          
+          isInternalChangeRef.current = true;
+          lastValueRef.current = newText;
+          onChange(newText);
+      }
+      setLastCorrection(null);
+  }, [lastCorrection, onChange]);
 
   return (
     <div className="relative" dir="ltr">
@@ -353,13 +581,20 @@ export const SmartScriptInput = ({
         ref={contentRef}
         contentEditable
         dir="ltr"
+        spellCheck={isEnabled}
+        lang="en"
+        autoCorrect={isEnabled ? "on" : "off"}
+        autoCapitalize={isEnabled ? "on" : "off"}
         onInput={handleInput}
         onKeyDown={handleKeyDown}
         onPaste={handlePaste}
         onFocus={handleFocusInternal}
         onBlur={onBlur} // Pass onBlur
+        onKeyUp={() => id && updateSelectionPosition(id)}
+        onMouseUp={() => id && updateSelectionPosition(id)}
         className={className}
         data-placeholder={placeholder}
+        id={id}
         suppressContentEditableWarning
         style={{
           minHeight: '1.5em',
@@ -381,6 +616,25 @@ export const SmartScriptInput = ({
         onSelect={applySuggestion}
         position={dropdownPosition}
       />
+
+      {pendingSuggestion && (
+        <ScriptAutocorrectBubble
+          original={pendingSuggestion.original}
+          suggestion={pendingSuggestion.suggestion}
+          position={pendingSuggestion.position}
+          onApply={applyPendingSuggestion}
+          onDismiss={() => setPendingSuggestion(null)}
+        />
+      )}
+
+      {lastCorrection && (
+        <AutoCorrectUndoPill
+          original={lastCorrection.original}
+          corrected={lastCorrection.corrected}
+          onUndo={handleUndoCorrection}
+          position={lastCorrection.position}
+        />
+      )}
     </div>
   );
 };

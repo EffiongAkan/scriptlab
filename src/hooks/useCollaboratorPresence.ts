@@ -12,6 +12,7 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
   const presenceTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   /** Timeout that clears the user's own editingElementId after inactivity */
   const editingClearTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const localSessionIdRef = useRef<string>(crypto.randomUUID());
   
   // Local presence state tracking to avoid stomping on each other
   const localCursorRef = useRef<{ elementId: string; position: number } | null>(null);
@@ -23,8 +24,7 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
   const processPresenceState = useCallback((newState: any): PresenceUserState[] => {
     const onlineUsers: PresenceUserState[] = [];
 
-    // newState is an object where keys are the presence keys (e.g. 'user_presence')
-    // and values are arrays of presence objects for that key
+    console.log('[useCollaboratorPresence] Raw presence state:', newState);
     if (newState && typeof newState === 'object') {
       Object.keys(newState).forEach(key => {
         const stateArray = newState[key];
@@ -35,12 +35,13 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
             // We need to handle potential different structures based on Supabase version
             const entry = stateItem as PresenceStateEntry;
 
-            if (entry?.user_id && entry?.username) {
-              // Check if user is already in the list (avoid duplicates from multiple tabs)
-              const existingIndex = onlineUsers.findIndex(u => u.user_id === String(entry.user_id));
+              // Check if user is already in the list (avoid duplicates from same connection)
+              const existingIndex = onlineUsers.findIndex(u => u.presence_ref === entry.presence_ref);
 
               const userState: PresenceUserState = {
                 user_id: String(entry.user_id),
+                presence_ref: entry.presence_ref,
+                session_id: entry.session_id,
                 username: String(entry.username),
               };
 
@@ -63,12 +64,12 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
               } else {
                 onlineUsers.push(userState);
               }
-            }
           });
         }
       });
     }
 
+    console.log('[useCollaboratorPresence] Online users processed:', onlineUsers);
     return onlineUsers;
   }, []);
 
@@ -82,42 +83,60 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
     };
 
     setCollaborators(prev => {
-      // 1. Map existing collaborators to update their status
-      const updatedKnown = prev.map(collaborator => {
-        const onlineMatch = onlineUsers.find(user => user.user_id === collaborator.id);
-        return onlineMatch
-          ? {
-            ...collaborator,
+      // Create a map of updated or new collaborators based on presence_ref
+      const nextCollaborators: Collaborator[] = [];
+
+      // Add online users (each connection is treated as a separate collaborator for cursor tracking)
+      onlineUsers.forEach(onlineUser => {
+        // Try to find if we already know this collaborator (either by presence_ref or fallback to user_id to preserve data)
+        let known = prev.find(k => k.presence_ref === onlineUser.presence_ref);
+        if (!known) {
+          known = prev.find(k => k.id === onlineUser.user_id && !k.presence_ref);
+        }
+
+        if (known) {
+          nextCollaborators.push({
+            ...known,
+            presence_ref: onlineUser.presence_ref,
+            session_id: onlineUser.session_id,
             status: 'online' as const,
-            color: colorForUser(collaborator.id),
-            cursor: onlineMatch.cursor,
-            editingElementId: onlineMatch.editingElementId,
-          }
-          : {
-            ...collaborator,
-            status: 'offline' as const,
-            color: colorForUser(collaborator.id),
-            cursor: undefined,
-            editingElementId: undefined,
-          };
+            color: colorForUser(onlineUser.user_id),
+            cursor: onlineUser.cursor,
+            editingElementId: onlineUser.editingElementId,
+            last_seen: new Date().toISOString()
+          });
+        } else {
+          // Ensure we also track the script creator or users not in script_collaborators
+          nextCollaborators.push({
+            id: onlineUser.user_id,
+            presence_ref: onlineUser.presence_ref,
+            session_id: onlineUser.session_id,
+            username: onlineUser.username || 'Anonymous',
+            email: '',
+            status: 'online' as const,
+            color: colorForUser(onlineUser.user_id),
+            cursor: onlineUser.cursor,
+            editingElementId: onlineUser.editingElementId,
+          });
+        }
       });
 
-      // 2. Find online users who are NOT in the known collaborators list
-      const unknownOnline = onlineUsers.filter(onlineUser =>
-        !prev.some(known => known.id === onlineUser.user_id)
-      );
+      // Add offline known collaborators that aren't in the online list
+      prev.forEach(known => {
+        if (!nextCollaborators.some(nc => nc.id === known.id)) {
+          // Keep one offline representation per user_id
+          if (!nextCollaborators.some(nc => nc.id === known.id && nc.status === 'offline')) {
+             nextCollaborators.push({
+               ...known,
+               status: 'offline' as const,
+               cursor: undefined,
+               editingElementId: undefined,
+             });
+          }
+        }
+      });
 
-      const newCollaborators = unknownOnline.map(user => ({
-        id: user.user_id,
-        username: user.username || 'Anonymous',
-        email: '',
-        status: 'online' as const,
-        color: colorForUser(user.user_id),
-        cursor: user.cursor,
-        editingElementId: user.editingElementId,
-      }));
-
-      return [...updatedKnown, ...newCollaborators];
+      return nextCollaborators;
     });
   }, []);
 
@@ -171,6 +190,7 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
 
       await channelRef.current.track({
         user_id: userProfile.userId,
+        session_id: localSessionIdRef.current,
         username: userProfile.username,
         cursor: localCursorRef.current,
         editingElementId: localEditingElementRef.current,
@@ -198,8 +218,16 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
       const userProfile = await getUserProfile();
       if (!userProfile) return;
 
+      const channelName = `presence:script:${scriptId}`;
+      
+      // Aggressively clean up any existing channel with this exact name to prevent "already subscribed" errors on remount
+      const existingChannel = supabase.getChannels().find(c => c.topic === `realtime:${channelName}` || c.topic === channelName);
+      if (existingChannel) {
+        await supabase.removeChannel(existingChannel);
+      }
+
       // Create optimized channel with presence configuration
-      const channel = supabase.channel(`presence:script:${scriptId}`, {
+      const channel = supabase.channel(channelName, {
         config: {
           presence: {
             key: 'user_presence',
@@ -267,15 +295,45 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
     };
   }, [scriptId, debouncedPresenceSync, getUserProfile, toast]);
 
-  // Update collaborators when initial collaborators change
+  // Update collaborators when initial collaborators change (e.g. new invites loaded)
+  // We must preserve existing online status and presence data to prevent flickering
   useEffect(() => {
-    setCollaborators(initialCollaborators);
+    setCollaborators(prev => {
+      let changed = false;
+      const merged = [...prev];
+
+      initialCollaborators.forEach(initial => {
+        const existingIndex = merged.findIndex(c => c.id === initial.id);
+        if (existingIndex === -1) {
+           merged.push(initial);
+           changed = true;
+        } else {
+           // Update metadata but PRESERVE live presence info
+           const existing = merged[existingIndex];
+           if (existing.email !== initial.email || existing.username !== initial.username || existing.avatar_url !== initial.avatar_url) {
+             merged[existingIndex] = { ...existing, email: initial.email, username: initial.username, avatar_url: initial.avatar_url };
+             changed = true;
+           }
+        }
+      });
+
+      return changed ? merged : prev;
+    });
   }, [initialCollaborators]);
+
+  const cursorSyncTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Optimized cursor position update with throttling
   const updateCursorPosition = useCallback(async (elementId: string, position: number) => {
     localCursorRef.current = { elementId, position };
-    await syncPresence();
+    
+    // Throttle cursor updates to at most once per 100ms
+    if (!cursorSyncTimeoutRef.current) {
+      cursorSyncTimeoutRef.current = setTimeout(async () => {
+        await syncPresence();
+        cursorSyncTimeoutRef.current = null;
+      }, 100);
+    }
   }, [syncPresence]);
 
   const lastBroadcastTimeRef = useRef<number>(0);
@@ -326,5 +384,5 @@ export const useCollaboratorPresence = (scriptId: string, initialCollaborators: 
     }
   }, [scriptId, getUserProfile, syncPresence]);
 
-  return { collaborators, updateCursorPosition, broadcastEditActivity };
+  return { collaborators, updateCursorPosition, broadcastEditActivity, localSessionId: localSessionIdRef.current };
 };

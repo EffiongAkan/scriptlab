@@ -649,8 +649,8 @@ Make this treatment comprehensive, engaging, and suitable for ${scenario.descrip
     previousBatchTail: string = "",
     rollingContext: string = ""
   ) => {
-    // CRITICAL: Switched to 1-scene-per-batch for 100% plot map adherence
-    const scenesPerBatch = 1;
+    // Generate 20 scenes per batch for strong continuity
+    const scenesPerBatch = 20;
     const startScene = batchNumber * scenesPerBatch + 1;
     const endScene = Math.min((batchNumber + 1) * scenesPerBatch, totalScenes);
 
@@ -673,20 +673,23 @@ Make this treatment comprehensive, engaging, and suitable for ${scenario.descrip
       : `Full Treatment: ${selectedSynopsis?.content}`;
 
     const scenePrompt = batchNumber === 0 ?
-      `Generate the following scene using these structural tags: [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS].
+      `Generate SCENES ${startScene} through ${endScene} (${endScene - startScene + 1} scenes total) using these structural tags: [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS].
 
 STRICT: Output ONLY the tagged script content. No labels, no preamble. Jump directly to the first [SCENE].
 
-Scene to generate: ${startScene} of ${totalScenes}
 Title: "${initialData?.title}${episodeText}"
 
-SCENE PLAN:
+OPENING SCENE RULE: The first scene MUST be intense, explosive and immediately gripping — use conflict, danger, confrontation or shocking revelation. NEVER a quiet opening.
+
+CHARACTER RULE: The FIRST TIME a character physically appears in an action line, write their name in ALL CAPS followed by their age in brackets, e.g. ADAEZE (32). On subsequent appearances, write normally.
+
+SCENE PLANS:
 ${plansContext}
 
-At the end of your response, after the [TRANS] or [SCENE] end, include a [SUMMARY] tag followed by a 1-sentence summary of what happened in this scene.
+At the end of your full response, include a [SUMMARY] tag followed by a 2-sentence summary of the key events across all scenes generated.
 ` :
 
-      `Generate SCENE ${startScene} of ${totalScenes}.
+      `Generate SCENES ${startScene} through ${endScene} of ${totalScenes} (${endScene - startScene + 1} scenes).
 
 STORY SO FAR (Memory):
 ${rollingContext || "N/A"}
@@ -694,11 +697,13 @@ ${rollingContext || "N/A"}
 Maintain continuity from exact previous scene tail:
 ${previousBatchTail || "N/A"}
 
-CURRENT SCENE PLAN:
+CHARACTER RULE: The FIRST TIME a character physically appears in an action line in this batch, write their name in ALL CAPS followed by their age in brackets, e.g. EMEKA (45). On subsequent appearances in the same batch, write normally.
+
+SCENE PLANS:
 ${plansContext}
 
-STRICT: Use ONLY [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS] tags. Do not explain anything. 
-At the end of your response, include a [SUMMARY] tag followed by a 1-sentence summary of what happened in this scene.`;
+STRICT: Use ONLY [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS] tags. Do not explain anything.
+At the end of your response, include a [SUMMARY] tag followed by a 2-sentence summary of what happened across all scenes in this batch.`;
 
     const maxRetries = 3;
     let retryCount = 0;
@@ -933,9 +938,9 @@ At the end of your response, include a [SUMMARY] tag followed by a 1-sentence su
 
         if (scriptError) throw new Error(`Failed to create script: ${scriptError.message}`);
 
-        // Generate content
-        const scenesPerBatch = 1; // 100% precision
-        const localTotalBatches = plotSettings.scenesNumber; // 1 scene = 1 batch
+        // Generate content — 20 scenes per batch for strong continuity
+        const scenesPerBatch = 20;
+        const localTotalBatches = Math.ceil(plotSettings.scenesNumber / scenesPerBatch);
         setTotalBatches(localTotalBatches);
 
         // Initialize story state for coherence tracking
@@ -1097,22 +1102,22 @@ At the end of your response, include a [SUMMARY] tag followed by a 1-sentence su
   return (
     <div className="container mx-auto py-8 space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Professional AI Screenplay Generator</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold">Professional AI Screenplay Generator</h1>
           {initialData && (
-            <p className="text-muted-foreground">
+            <p className="text-muted-foreground mt-1">
               Creating "{initialData.title}" - {initialData.genre}
             </p>
           )}
         </div>
-        <Button variant="outline" onClick={handleBackToDashboard}>
+        <Button variant="outline" onClick={handleBackToDashboard} className="shrink-0">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
         </Button>
       </div>
 
-      <div className="flex items-center space-x-4 mb-8">
+      <div className="flex flex-wrap items-center gap-y-4 gap-x-2 sm:gap-x-4 mb-8 text-sm sm:text-base">
         <div className={`flex items-center space-x-2 ${currentStep === 'synopsis' ? 'text-primary' : 'text-green-600'}`}>
           <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep === 'synopsis' ? 'bg-primary text-primary-foreground' : 'bg-green-600 text-white'}`}>
             {currentStep !== 'synopsis' ? <CheckCircle className="h-4 w-4" /> : '1'}
@@ -1340,14 +1345,14 @@ At the end of your response, include a [SUMMARY] tag followed by a 1-sentence su
                       </div>
                     )}
                   </div>
-                  <div className="flex justify-between">
-                    <Button variant="outline" onClick={() => setCurrentStep('synopsis')}>
-                      <ArrowLeft className="mr-2 h-4 w-4" />
-                      Back to Treatment
+                  <div className="flex flex-col-reverse sm:flex-row gap-3 justify-between mt-6">
+                    <Button variant="outline" className="w-full sm:w-auto h-auto py-2 whitespace-normal" onClick={() => setCurrentStep('synopsis')}>
+                      <ArrowLeft className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="text-left">Back to Treatment</span>
                     </Button>
-                    <Button onClick={handleGenerateScript} className="bg-primary">
-                      <Sparkles className="mr-2 h-4 w-4" />
-                      Generate Professional Screenplay
+                    <Button onClick={handleGenerateScript} className="bg-primary w-full sm:w-auto h-auto py-2 whitespace-normal">
+                      <Sparkles className="mr-2 h-4 w-4 shrink-0" />
+                      <span className="text-left">Generate Professional Screenplay</span>
                     </Button>
                   </div>
                 </CardContent>

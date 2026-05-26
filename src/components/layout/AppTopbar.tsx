@@ -3,7 +3,7 @@ import React from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu, DollarSign, Shield, Zap, LogOut } from "lucide-react";
+import { Home, FileText, Users, BookOpen, BarChart, Settings, Crown, GitBranch, Save, Layout, Menu, DollarSign, Shield, Zap, LogOut, User } from "lucide-react";
 import { useScriptSave } from "@/hooks/useScriptSave";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
@@ -49,6 +49,25 @@ export const AppTopbar: React.FC = () => {
     },
     enabled: !!user,
   });
+
+  // Fetch user profile for avatar
+  const { data: userProfile } = useQuery({
+    queryKey: ['user-profile-avatar', user?.id],
+    queryFn: async () => {
+      if (!user) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('avatar_url, full_name')
+        .eq('id', user.id)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!user,
+  });
+
+  const userInitials = userProfile?.full_name
+    ? userProfile.full_name.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2)
+    : user?.email?.[0]?.toUpperCase() ?? 'U';
 
   const finalMenuItems = [...menuItems];
   if (isAdmin) {
@@ -114,25 +133,32 @@ export const AppTopbar: React.FC = () => {
       aria-label="Main site navigation"
     >
       {/* Logo and app name */}
-      <div className="flex items-center gap-2 flex-shrink-0">
-        <div className="bg-white p-1 rounded-md flex items-center justify-center flex-shrink-0">
-          <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-8 w-auto min-w-[32px] block" />
-        </div>
-        <span className="text-white font-bold text-lg md:text-xl">ScriptLab</span>
+      <div className="flex items-center gap-3 flex-shrink-0 group cursor-pointer" onClick={() => navigate("/")}>
+        <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-10 w-auto min-w-[40px] block drop-shadow-[0_0_8px_rgba(255,255,255,0.2)] transition-transform group-hover:scale-110" />
+        <span className="text-white font-extrabold text-xl md:text-2xl tracking-tighter transition-colors group-hover:text-naija-gold">Scriptyn</span>
       </div>
 
       {/* Desktop Navigation */}
-      <div className="hidden md:flex flex-1 items-center justify-center gap-2 ml-3">
+      <div className="hidden md:flex flex-1 items-center justify-center gap-1 ml-3">
         {
           finalMenuItems.map(item => {
             const isActive = location.pathname === item.path;
+            const isPremium = item.title === 'Premium';
             return (
               <Button
                 asChild
                 key={item.path}
                 variant={isActive ? "secondary" : "ghost"}
                 size="default"
-                className={`flex items-center px-4 py-2 ${isActive ? "bg-sidebar-accent text-white" : "text-sidebar-foreground"} transition-colors focus:outline-none focus:ring-2 focus:ring-naija-gold`}
+                className={`flex items-center px-3 py-2 transition-colors focus:outline-none focus:ring-2 focus:ring-naija-gold ${
+                  isPremium
+                    ? isActive
+                      ? 'bg-purple-600/20 text-purple-300 border border-purple-500/30'
+                      : 'text-purple-300 hover:text-purple-200 hover:bg-purple-600/10'
+                    : isActive
+                      ? 'bg-sidebar-accent text-white'
+                      : 'text-sidebar-foreground'
+                }`}
               >
                 <Link
                   to={item.path}
@@ -140,8 +166,8 @@ export const AppTopbar: React.FC = () => {
                   aria-label={item.title}
                   className="flex items-center gap-2"
                 >
-                  <item.icon className="h-5 w-5" />
-                  <span className="text-base">{item.title}</span>
+                  <item.icon className={`h-4 w-4 ${isPremium ? 'text-purple-400' : ''}`} />
+                  <span className="text-sm">{item.title}</span>
                 </Link>
               </Button>
             );
@@ -165,10 +191,8 @@ export const AppTopbar: React.FC = () => {
           <SheetContent side="right" className="w-[300px] bg-sidebar text-sidebar-foreground border-sidebar-border">
             <div className="flex flex-col gap-4 mt-6">
               <div className="flex items-center gap-2 pb-4 border-b border-sidebar-border flex-shrink-0">
-                <div className="bg-white p-1 rounded-md flex items-center justify-center flex-shrink-0">
-                  <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-6 w-auto min-w-[24px] block" />
-                </div>
-                <span className="text-white font-bold text-lg">ScriptLab</span>
+                <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-6 w-auto min-w-[24px] block" />
+                <span className="text-white font-bold text-lg">Scriptyn</span>
               </div>
 
               <div className="flex flex-col gap-2">
@@ -219,37 +243,34 @@ export const AppTopbar: React.FC = () => {
         {/* Notifications */}
         <NotificationBell />
 
-        {/* Save Button */}
-        {scriptId && (
-          <Button
-            onClick={handleSaveProject}
-            className={`bg-naija-gold text-black hover:bg-naija-gold-dark px-3 md:px-4 ${saveStatus === 'success' ? "ring ring-naija-green ring-offset-2" : ""}`}
-            disabled={isSaving || saveStatus === 'saving'}
-            size={isMobile ? "sm" : "default"}
-            aria-label="Save"
-          >
-            <Save className="h-4 w-4 mr-1" />
-            <span className="hidden sm:inline">
-              {isSaving || saveStatus === 'saving'
-                ? "Saving..."
-                : saveStatus === 'success'
-                  ? "Saved!"
-                  : "Save"}
-            </span>
-          </Button>
-        )}
-
-        {/* Logout Button */}
+        {/* Logout Button (desktop: replaced by avatar; mobile: show icon) */}
         <Button
           variant="ghost"
           size={isMobile ? "sm" : "default"}
           onClick={handleSignOut}
-          className="text-sidebar-foreground px-2"
+          className="md:hidden text-sidebar-foreground px-2"
           aria-label="Sign Out"
         >
           <LogOut className="h-5 w-5" />
-          {!isMobile && <span className="ml-2 text-sm">Sign Out</span>}
         </Button>
+
+        {/* User Avatar (desktop) */}
+        <button
+          onClick={handleSignOut}
+          className="hidden md:flex h-9 w-9 rounded-full overflow-hidden border-2 border-white/20 hover:border-naija-gold/60 transition-all items-center justify-center bg-gray-700 flex-shrink-0"
+          title={`Signed in as ${user?.email ?? 'User'} — click to sign out`}
+          aria-label="User profile / Sign out"
+        >
+          {userProfile?.avatar_url ? (
+            <img
+              src={userProfile.avatar_url}
+              alt="Profile"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <span className="text-xs font-bold text-white">{userInitials}</span>
+          )}
+        </button>
       </div>
     </nav>
   );

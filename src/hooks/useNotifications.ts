@@ -117,12 +117,20 @@ export const useNotifications = () => {
 
         let channel: ReturnType<typeof supabase.channel> | null = null;
 
-        supabase.auth.getUser().then(({ data }) => {
+        supabase.auth.getUser().then(async ({ data }) => {
             if (!data.user) return;
+
+            const channelName = `notifications_${data.user.id}`;
+            
+            // Aggressively clean up any existing channel with this name to prevent "already subscribed" errors on remount
+            const existingChannel = supabase.getChannels().find(c => c.topic === `realtime:${channelName}` || c.topic === channelName);
+            if (existingChannel) {
+                await supabase.removeChannel(existingChannel);
+            }
 
             // Subscribe to new notifications for this user
             channel = supabase
-                .channel(`notifications_${data.user.id}`)
+                .channel(channelName)
                 .on(
                     'postgres_changes',
                     {

@@ -18,6 +18,13 @@ import { VideoAnalysisDialog } from "@/components/common/VideoAnalysisDialog";
 import { EpisodicStructureSelector } from "@/components/common/EpisodicStructureSelector";
 import { SeasonPlanningSelector, SeasonPlan } from "@/components/common/SeasonPlanningSelector";
 import { supportsEpisodicStructure } from "@/utils/scriptTypeGuidance";
+import { z } from "zod";
+
+const scriptCreationSchema = z.object({
+  title: z.string().min(1, "Title is required").max(100, "Title is too long"),
+  genre: z.string().min(1, "Please select a genre"),
+  idea: z.string().min(10, "Story idea must be at least 10 characters").max(2000, "Story idea is too long"),
+});
 
 interface ScriptCreationDialogProps {
   open: boolean;
@@ -42,6 +49,7 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
   const [storyIdea, setStoryIdea] = useState("");
   const [scriptTitle, setScriptTitle] = useState("");
   const [selectedGenre, setSelectedGenre] = useState<Genre>();
+  const [validationErrors, setValidationErrors] = useState<{ title?: string; genre?: string; idea?: string }>({});
 
   React.useEffect(() => {
     if (open) {
@@ -249,13 +257,18 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
   };
 
   const handleAISubmit = async () => {
-    if (!storyIdea.trim() || !scriptTitle.trim() || !selectedGenre) {
-      toast({
-        title: "Missing Information",
-        description: "Please provide title, genre, and story idea",
-        variant: "destructive"
-      });
-      return;
+    setValidationErrors({});
+    try {
+      scriptCreationSchema.parse({ title: scriptTitle, genre: selectedGenre, idea: storyIdea });
+    } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        const errors: any = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) errors[err.path[0]] = err.message;
+        });
+        setValidationErrors(errors);
+        return;
+      }
     }
 
     // Store the data for the plot generator
@@ -445,9 +458,11 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
                 <Input
                   id="title"
                   value={scriptTitle}
-                  onChange={(e) => setScriptTitle(e.target.value)}
+                  onChange={(e) => { setScriptTitle(e.target.value); setValidationErrors(prev => ({...prev, title: undefined})) }}
                   placeholder="Enter your script title"
+                  className={validationErrors.title ? "border-red-500" : ""}
                 />
+                {validationErrors.title && <p className="text-red-500 text-xs mt-1">{validationErrors.title}</p>}
                 {creationMethod === 'video' && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Pre-filled from video title (you can edit)
@@ -457,8 +472,8 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
 
               <div>
                 <Label htmlFor="genre">Genre</Label>
-                <Select value={selectedGenre} onValueChange={(value) => setSelectedGenre(value as Genre)}>
-                  <SelectTrigger>
+                <Select value={selectedGenre} onValueChange={(value) => { setSelectedGenre(value as Genre); setValidationErrors(prev => ({...prev, genre: undefined})) }}>
+                  <SelectTrigger className={validationErrors.genre ? "border-red-500" : ""}>
                     <SelectValue placeholder="Select genre" />
                   </SelectTrigger>
                   <SelectContent>
@@ -472,6 +487,7 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
                     <SelectItem value="FANTASY">Fantasy</SelectItem>
                   </SelectContent>
                 </Select>
+                {validationErrors.genre && <p className="text-red-500 text-xs mt-1">{validationErrors.genre}</p>}
                 {creationMethod === 'video' && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Detected from video analysis (you can change)
@@ -484,10 +500,12 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
                 <Textarea
                   id="storyIdea"
                   value={storyIdea}
-                  onChange={(e) => setStoryIdea(e.target.value)}
+                  onChange={(e) => { setStoryIdea(e.target.value); setValidationErrors(prev => ({...prev, idea: undefined})) }}
                   placeholder="Describe your story concept..."
                   rows={6}
+                  className={validationErrors.idea ? "border-red-500" : ""}
                 />
+                {validationErrors.idea && <p className="text-red-500 text-xs mt-1">{validationErrors.idea}</p>}
                 {creationMethod === 'video' && (
                   <p className="text-xs text-muted-foreground mt-1">
                     Based on video analysis (feel free to modify or replace)

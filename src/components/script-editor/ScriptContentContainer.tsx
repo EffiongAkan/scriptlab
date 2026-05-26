@@ -12,6 +12,7 @@ import { useCollaboration } from "@/contexts/CollaborationContext";
 import { ScriptLoadingState } from "./script-content/ScriptLoadingState";
 import { ScriptFormatToolbar } from "./script-content/ScriptFormatToolbar";
 import { useScriptEditor } from "@/contexts/ScriptEditorContext";
+import { useScriptHistory } from "@/contexts/ScriptHistoryContext";
 import { ScriptStatisticsFooter } from "./script-content/ScriptStatisticsFooter";
 import { CollaborativeIndicators } from "./CollaborativeIndicators";
 import { ScriptOutlineNav } from "./ScriptOutlineNav";
@@ -22,7 +23,7 @@ import { validateAndCleanContent } from "@/utils/scriptElementParser";
 import { ScriptCommentsSidebar } from "@/components/comments/ScriptCommentsSidebar";
 import { useQuoteSelection } from "@/hooks/useQuoteSelection";
 import { useScriptComments } from "@/hooks/useScriptComments";
-import { Quote, MessageSquare, ChevronRight, Sparkles } from "lucide-react";
+import { Quote, MessageSquare, ChevronRight, Sparkles, Search, Plus, Cloud, PanelLeft, PanelLeftClose, ChevronUp, ChevronDown, Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScriptAISidebar } from "./ScriptAISidebar";
 import { FloatingSuggestions } from "./FloatingSuggestions";
@@ -52,7 +53,7 @@ export const ScriptContentContainer = ({
   lastSavedAt,
   hasUnsavedChanges = false
 }: ScriptContentContainerProps) => {
-  const { elements: initialElements, isLoaded, loadError, reorderElements, updateElement } = useScriptContent(scriptId);
+  const { elements: initialElements, isLoaded, loadError, reorderElements, updateElement, deleteElements } = useScriptContent(scriptId);
 
   // Use elements from props if provided (controlled mode), otherwise use database elements
   const elementsToUse = propsElements !== undefined ? propsElements : initialElements;
@@ -62,22 +63,33 @@ export const ScriptContentContainer = ({
   const [isOutlineOpen, setIsOutlineOpen] = useState<boolean>(true);
   const [isMobileView, setIsMobileView] = useState<boolean>(false);
   const { focusedElementId, setFocusedElementId, insertScriptElement } = useScriptEditor();
+  const { undo, redo, canUndo, canRedo } = useScriptHistory();
   const PAGE_SIZE = 50;
   const [currentPage, setCurrentPage] = useState<number>(0);
+
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
   // Detect mobile viewport
   useEffect(() => {
     const checkMobile = () => {
       setIsMobileView(window.innerWidth < 768);
-      // Auto-close outline on mobile initially
+      // Auto-close outline on outline on mobile initially
       if (window.innerWidth < 768) {
         setIsOutlineOpen(false);
       }
     };
 
+    const handleToggleComments = () => {
+      setIsCommentsOpen(prev => !prev);
+    };
+
     checkMobile();
     window.addEventListener('resize', checkMobile);
-    return () => window.removeEventListener('resize', checkMobile);
+    document.addEventListener('toggle-comments-sidebar', handleToggleComments);
+    return () => {
+      window.removeEventListener('resize', checkMobile);
+      document.removeEventListener('toggle-comments-sidebar', handleToggleComments);
+    };
   }, []);
 
   const {
@@ -92,7 +104,8 @@ export const ScriptContentContainer = ({
     selectedElementIds,
     handleElementClick,
     deleteSelectedElements,
-    setAllElements
+    setAllElements,
+    pushState
   } = useScriptContentState(scriptId, elementsToUse, onContentChange);
 
   // Handle delete key for batch deletion
@@ -125,7 +138,6 @@ export const ScriptContentContainer = ({
   const { selection: quoteSelection, clearSelection } = useQuoteSelection();
   const { collaborators } = useCollaboration();
   const { comments, addComment, isLoading: commentsLoading } = useScriptComments(scriptId);
-  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
   const [newComment, setNewComment] = useState("");
   const [isPostingComment, setIsPostingComment] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -193,17 +205,7 @@ export const ScriptContentContainer = ({
     setIsCommentsOpen(true);
   }, []);
 
-  // Listen for save shortcut events
-  useEffect(() => {
-    const handleSaveShortcut = () => {
-      if (onContentChange) {
-        onContentChange();
-      }
-    };
 
-    document.addEventListener('script-save', handleSaveShortcut);
-    return () => document.removeEventListener('script-save', handleSaveShortcut);
-  }, [onContentChange]);
 
   // Show toast for load errors
   useEffect(() => {
@@ -427,16 +429,139 @@ export const ScriptContentContainer = ({
     }
   }, [rawScriptElements, toast, onContentChange, reorderElements, blockRealtimeSync]);
 
+  // Handle bulk scene deletion from the outline panel
+  const handleDeleteScenes = useCallback(async (sceneIds: string[]) => {
+    if (!sceneIds.length) return;
+
+    try {
+      const sceneIdSet = new Set(sceneIds);
+
+      // Collect ALL element IDs that belong to each selected scene
+      // (the heading + all subsequent elements until the next heading)
+      const elementIdsToRemove = new Set<string>();
+      let inTargetScene = false;
+
+      for (const element of rawScriptElements) {
+        if (element.type === 'heading') {
+          inTargetScene = sceneIdSet.has(element.id);
+        }
+        if (inTargetScene) {
+          elementIdsToRemove.add(element.id);
+        }
+      }
+
+      if (elementIdsToRemove.size === 0) {
+        console.warn('handleDeleteScenes: no elements found for scenes', sceneIds);
+        return;
+      }
+
+      const idsToDelete = Array.from(elementIdsToRemove);
+
+      // Compute the remaining elements with re-indexed positions
+      const remaining = rawScriptElements
+        .filter(el => !elementIdsToRemove.has(el.id))
+        .map((el, idx) => ({ ...el, position: idx }));
+
+      // Block realtime sync to prevent DB echoes from overwriting our changes
+      if (blockRealtimeSync) blockRealtimeSync(10000);
+
+      // STEP 1: Update local state + global history IMMEDIATELY so the UI
+      // reflects the deletion and auto-save won't re-save the ghost elements.
+      if (setAllElements) setAllElements(remaining);
+      if (pushState) pushState(remaining);
+
+      // STEP 2: Hard-delete the elements from Supabase.
+      // We try the dedicated delete RPC first (bypasses RLS with SECURITY DEFINER),
+      // then fall back to a direct table delete.
+      console.log(`Deleting ${idsToDelete.length} elements from DB...`);
+      const { error: rpcDeleteError } = await supabase.rpc('delete_script_elements' as any, {
+        p_script_id: scriptId,
+        p_element_ids: idsToDelete,
+      });
+
+      if (rpcDeleteError) {
+        console.warn('delete_script_elements RPC not available, using direct delete:', rpcDeleteError.message);
+        // Fallback: direct table delete
+        const { error: directDeleteError } = await supabase
+          .from('script_elements')
+          .delete()
+          .in('id', idsToDelete);
+
+        if (directDeleteError) {
+          console.error('Direct delete also failed:', directDeleteError);
+          throw new Error(`Failed to delete elements from database: ${directDeleteError.message}`);
+        }
+      }
+
+      console.log(`Successfully deleted ${idsToDelete.length} elements.`);
+
+      // STEP 3: Atomically sync the remaining elements' positions via the bulk RPC.
+      // After the FIX_SCENE_DELETION.sql is applied, this RPC will also delete any
+      // remaining orphans, making this a true two-layer safety net.
+      if (remaining.length > 0) {
+        const { error: syncError } = await supabase.rpc('sync_script_elements_bulk' as any, {
+          p_script_id: scriptId,
+          p_elements: remaining.map(el => ({
+            id: el.id,
+            type: el.type,
+            content: el.content || '',
+            position: el.position,
+          })),
+        });
+
+        if (syncError) {
+          // Non-fatal: positions may be slightly off but elements are deleted
+          console.warn('Bulk sync after deletion failed (non-fatal):', syncError.message);
+        }
+      }
+
+      toast({
+        title: sceneIds.length === 1 ? 'Scene deleted' : `${sceneIds.length} scenes deleted`,
+        description: 'The selected scene(s) have been permanently removed.',
+      });
+
+      if (onContentChange) onContentChange();
+    } catch (error) {
+      console.error('Error deleting scenes:', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to delete the selected scene(s).',
+        variant: 'destructive',
+      });
+    }
+  }, [rawScriptElements, scriptId, supabase, toast, onContentChange, blockRealtimeSync, setAllElements, pushState]);
+
   // === Pagination controls ===
   const handlePrevPage = () => setCurrentPage((p) => Math.max(0, p - 1));
   const handleNextPage = () => setCurrentPage((p) => Math.min(totalPages - 1, p + 1));
 
-  // Reset to first page when scriptElements change/length shrinks
+  // Reset to first page when scriptElements change/length shrinks drastically
   useEffect(() => {
     if (currentPage > 0 && (currentPage * PAGE_SIZE >= scriptElements.length)) {
       setCurrentPage(0);
     }
-  }, [scriptElements.length]);
+  }, [scriptElements.length, currentPage]);
+
+  // Auto-paginate when the focused element changes (e.g., hitting enter creates a new element on the next page)
+  useEffect(() => {
+    if (focusedElementId && scriptElements.length > 0) {
+      const elementIndex = scriptElements.findIndex(el => el.id === focusedElementId);
+      if (elementIndex !== -1) {
+        const targetPage = Math.floor(elementIndex / PAGE_SIZE);
+        if (targetPage !== currentPage) {
+          setCurrentPage(targetPage);
+          
+          // Optionally scroll to the element once the page switches
+          setTimeout(() => {
+            const element = document.getElementById(`script-element-${focusedElementId}`);
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 100);
+        }
+      }
+    }
+  }, [focusedElementId, scriptElements]);
 
   const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
@@ -467,11 +592,25 @@ export const ScriptContentContainer = ({
               : isOutlineOpen ? "w-[300px]" : "w-0"
           )}
         >
-          <div className="p-4 border-b border-gray-800 flex items-center justify-between">
+          <div className="p-3 border-b border-gray-800 flex items-center justify-between">
             <h2 className="text-xs font-bold uppercase tracking-widest text-gray-500">Structure</h2>
-            <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500" onClick={toggleOutline}>
-              <ChevronRight className={cn("h-4 w-4 transition-transform", isOutlineOpen && "rotate-180")} />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500 hover:text-gray-300" title="Search scenes">
+                <Search className="h-3.5 w-3.5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6 text-gray-500 hover:text-naija-green hover:bg-naija-green/10"
+                title="Add scene"
+                onClick={() => insertScriptElement('heading')}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+              <Button variant="ghost" size="icon" className="h-6 w-6 text-gray-500" onClick={toggleOutline}>
+                <ChevronRight className={cn("h-4 w-4 transition-transform", isOutlineOpen && "rotate-180")} />
+              </Button>
+            </div>
           </div>
           <ScriptOutlineNav
             elements={scriptElements}
@@ -481,8 +620,14 @@ export const ScriptContentContainer = ({
             }}
             onScrollToElement={scrollToElementId}
             onReorder={handleSceneReorder}
+            onDeleteScenes={handleDeleteScenes}
             className="flex-1 border-0 bg-transparent"
           />
+          {/* Cloud Synced Indicator */}
+          <div className="px-3 py-2 border-t border-gray-800/50 flex items-center gap-1.5">
+            <Cloud className="h-3 w-3 text-naija-green" />
+            <span className="text-[10px] text-gray-600 font-medium">Cloud Synced</span>
+          </div>
         </aside>
 
         {/* Center: Script Canvas */}
@@ -512,6 +657,10 @@ export const ScriptContentContainer = ({
                   totalPages={totalPages}
                   onPrevPage={handlePrevPage}
                   onNextPage={handleNextPage}
+                  onUndo={undo}
+                  onRedo={redo}
+                  canUndo={canUndo}
+                  canRedo={canRedo}
                 />
               </div>
               
@@ -520,6 +669,47 @@ export const ScriptContentContainer = ({
                 <ScriptStatisticsFooter scriptElements={scriptElements} />
               </div>
             </div>
+
+            {/* Floating Navigation Controls */}
+            <Button
+              variant="outline"
+              size="icon"
+              className={cn(
+                "fixed top-1/2 -translate-y-1/2 z-50 bg-[#1f2937]/90 backdrop-blur-md border-gray-700 shadow-xl transition-all duration-300",
+                isOutlineOpen ? (isMobileView ? "left-[85%]" : "left-[300px]") : "left-0",
+                isOutlineOpen ? "rounded-full w-8 h-8 -ml-4" : "rounded-r-md rounded-l-none border-l-0"
+              )}
+              onClick={toggleOutline}
+              title={isOutlineOpen ? "Hide Sidebar" : "Show Sidebar"}
+            >
+              {isOutlineOpen ? <PanelLeftClose className="h-4 w-4 text-gray-300" /> : <PanelLeft className="h-4 w-4 text-gray-300" />}
+            </Button>
+
+            {totalPages !== undefined && totalPages > 1 && (
+              <div className="fixed bottom-6 right-2 md:bottom-8 md:right-8 z-50 flex flex-col gap-2 scale-75 md:scale-100 origin-bottom-right opacity-50 hover:opacity-100 transition-opacity duration-300">
+                <div className="flex items-center gap-2 px-2 py-1.5 md:px-3 md:py-2 bg-[#1f2937]/80 backdrop-blur-md rounded-full border border-gray-700 shadow-lg md:shadow-xl">
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={currentPage === 0}
+                    className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                    title="Previous Page"
+                  >
+                    <ChevronUp className="h-4 w-4" />
+                  </button>
+                  <span className="text-xs font-mono text-gray-300 min-w-[3ch] text-center">
+                    {currentPage + 1}/{totalPages}
+                  </span>
+                  <button
+                    onClick={handleNextPage}
+                    disabled={currentPage === totalPages - 1}
+                    className="p-1 rounded-full text-gray-400 hover:text-white hover:bg-white/10 disabled:opacity-30 disabled:hover:bg-transparent transition-all"
+                    title="Next Page"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            )}
 
             <div className="py-0 md:py-10 px-0 md:px-4 flex flex-col items-center w-full pb-44 md:pb-32">
               <div className="w-full max-w-none md:max-w-[210mm] relative shadow-none md:shadow-2xl mb-12 md:mb-0">

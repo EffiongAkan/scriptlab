@@ -3,7 +3,6 @@ import React from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Users, MessageCircle, Activity, Settings } from 'lucide-react';
-import { LiveCursorSystem } from './LiveCursorSystem';
 import { RealtimeComments } from './RealtimeComments';
 import { EnhancedPresenceIndicator } from './EnhancedPresenceIndicator';
 import { ActivityFeed } from './ActivityFeed';
@@ -24,11 +23,6 @@ export const CollaborativeWorkspace: React.FC<CollaborativeWorkspaceProps> = ({
 
   return (
     <div className="space-y-6">
-      {/* Live Cursor System - Rendered globally if enabled */}
-      {showCursors && (
-        <LiveCursorSystem scriptId={scriptId} currentUserId={currentUserId} />
-      )}
-
       {/* Enhanced Presence Indicator */}
       <EnhancedPresenceIndicator scriptId={scriptId} currentUserId={currentUserId} />
 

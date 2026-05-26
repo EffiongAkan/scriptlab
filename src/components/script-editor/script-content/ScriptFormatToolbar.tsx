@@ -1,10 +1,16 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Bold, Italic, AlignLeft, AlignCenter, AlignRight, ZoomIn, ZoomOut, PanelLeft, PanelLeftClose, Type, ListChecks, Camera, MessageSquare, Plus, Keyboard, CaseUpper, CaseLower } from "lucide-react";
+import {
+  Bold, Italic, Underline, AlignLeft, AlignCenter, AlignJustify,
+  Search, MessageSquare, Link2, Image as ImageIcon,
+  Maximize2, Keyboard, ChevronDown, List, PanelLeft, PanelLeftClose, Plus, 
+  Undo, Redo, SpellCheck
+} from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
 
 interface ScriptFormatToolbarProps {
   zoom: string;
@@ -12,18 +18,27 @@ interface ScriptFormatToolbarProps {
   onInsertElement: (type: string) => void;
   onToggleSceneNav: () => void;
   isSceneNavOpen: boolean;
-  /** Type of the currently focused script element (mobile type-switcher) */
   activeElementType?: string | null;
-  /** Called when user taps a type chip in the mobile type-switcher */
   onChangeElementType?: (newType: string) => void;
-  /** If true, the mobile type switcher will be hidden (useful when other menus are active) */
   hideMobileSwitcher?: boolean;
-  /** Pagination props */
   currentPage?: number;
   totalPages?: number;
   onPrevPage?: () => void;
   onNextPage?: () => void;
+  onUndo?: () => void;
+  onRedo?: () => void;
+  canUndo?: boolean;
+  canRedo?: boolean;
 }
+
+const ELEMENT_TYPES = [
+  { type: 'action', label: 'Action' },
+  { type: 'heading', label: 'Scene Heading' },
+  { type: 'character', label: 'Character' },
+  { type: 'dialogue', label: 'Dialogue' },
+  { type: 'parenthetical', label: 'Parenthetical' },
+  { type: 'transition', label: 'Transition' },
+];
 
 export const ScriptFormatToolbar = ({
   zoom,
@@ -38,306 +53,227 @@ export const ScriptFormatToolbar = ({
   totalPages,
   onPrevPage,
   onNextPage,
+  onUndo,
+  onRedo,
+  canUndo = false,
+  canRedo = false,
 }: ScriptFormatToolbarProps) => {
-  const ELEMENT_TYPES = [
-    { type: 'heading', label: 'H', fullLabel: 'Scene Heading' },
-    { type: 'action', label: 'A', fullLabel: 'Action' },
-    { type: 'character', label: 'C', fullLabel: 'Character' },
-    { type: 'dialogue', label: 'D', fullLabel: 'Dialogue' },
-    { type: 'parenthetical', label: 'P', fullLabel: 'Parenthetical' },
-    { type: 'transition', label: 'T', fullLabel: 'Transition' },
-  ];
+
+  const [isAutoCorrectEnabled, setIsAutoCorrectEnabled] = React.useState(() => {
+    if (typeof window === 'undefined') return true;
+    const saved = localStorage.getItem('autocorrect-enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  React.useEffect(() => {
+    const handleToggle = () => {
+      const saved = localStorage.getItem('autocorrect-enabled');
+      const newState = saved !== null ? !JSON.parse(saved) : false;
+      setIsAutoCorrectEnabled(newState);
+    };
+    document.addEventListener('autocorrect-toggle', handleToggle);
+    return () => document.removeEventListener('autocorrect-toggle', handleToggle);
+  }, []);
+
+  const toggleAutoCorrect = () => {
+    document.dispatchEvent(new CustomEvent('autocorrect-toggle'));
+  };
+
+  const handleFormat = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+  };
+
+  const handleInsertLink = () => {
+    const url = prompt("Enter link URL:");
+    if (url) handleFormat('createLink', url);
+  };
+
+  const handleInsertImage = () => {
+    const url = prompt("Enter image URL:");
+    if (url) handleFormat('insertImage', url);
+  };
+
+  const currentTypeLabel = ELEMENT_TYPES.find(t => t.type === activeElementType)?.label ?? 'Action';
+
+  const ToolbarButton = ({ icon: Icon, tooltip, onClick, active, disabled }: { icon: any, tooltip: string, onClick?: () => void, active?: boolean, disabled?: boolean }) => (
+    <TooltipProvider>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className={cn(
+              "h-9 w-9 text-gray-400 hover:text-white hover:bg-white/5 transition-colors",
+              active && "text-white bg-white/10"
+            )}
+            onClick={onClick}
+            disabled={disabled}
+            onMouseDown={(e) => e.preventDefault()} // Prevent focus loss
+          >
+            <Icon className="h-4 w-4" />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">
+          <p>{tooltip}</p>
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
 
   return (
-    <div className="bg-[#1E1E1E] md:border-b border-gray-800 shadow-sm">
-      {/* Mobile-only: Element Type Quick-Switcher */}
-      {onChangeElementType && !hideMobileSwitcher && (
-        <div className="sm:hidden flex items-center justify-center gap-1.5 px-3 py-2 border-b border-gray-800/60 overflow-x-auto min-w-full">
-          <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-widest shrink-0 mr-1">Type:</span>
-          {ELEMENT_TYPES.map(({ type, label, fullLabel }) => {
-            const isActive = activeElementType === type;
-            return (
-              <button
-                key={type}
-                onClick={() => onChangeElementType(type)}
-                className={`shrink-0 h-8 px-3 rounded-full text-xs font-bold border transition-colors touch-manipulation ${isActive
-                    ? 'bg-naija-green text-white border-naija-green shadow-lg shadow-naija-green/30'
-                    : 'bg-gray-800/70 text-gray-400 border-gray-700 hover:bg-gray-700 hover:text-gray-200'
-                  }`}
-                title={fullLabel}
+    <div className="w-full bg-[#111827] border-y border-white/5 flex flex-col">
+      {/* Main Toolbar Row - Allow horizontal scroll on very small screens */}
+      <div className="px-4 py-2 flex items-center justify-between gap-4 overflow-x-auto no-scrollbar">
+        {/* Left Section: Element Dropdown & Formatting */}
+        <div className="flex items-center gap-2 flex-nowrap shrink-0">
+          {/* Scene nav toggle moved to floating button in ScriptContentContainer */}
+          
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
+
+          {/* History Group */}
+          <div className="flex items-center gap-0.5">
+            <ToolbarButton icon={Undo} tooltip="Undo (Ctrl+Z)" onClick={onUndo} disabled={!canUndo} />
+            <ToolbarButton icon={Redo} tooltip="Redo (Ctrl+Y)" onClick={onRedo} disabled={!canRedo} />
+          </div>
+
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="outline"
+                className="h-9 px-3 bg-white/5 border-white/10 text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2 min-w-[120px] justify-between font-medium"
               >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Main toolbar row */}
-      <div className="py-1 px-2 md:p-2 flex flex-wrap items-center justify-between gap-1">
-        {/* Left section: Scene Nav Toggle */}
-        <div className="flex items-center gap-1">
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 sm:h-8 sm:w-8 touch-manipulation text-gray-400 hover:text-white"
-                  onClick={onToggleSceneNav}
+                <span>{currentTypeLabel}</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-48 bg-[#1f2937] border-white/10 text-gray-300">
+              {ELEMENT_TYPES.map((type) => (
+                <DropdownMenuItem
+                  key={type.type}
+                  onClick={() => onChangeElementType?.(type.type)}
+                  className="hover:bg-white/5 hover:text-white cursor-pointer"
                 >
-                  {isSceneNavOpen ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeft className="h-4 w-4" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>{isSceneNavOpen ? "Hide" : "Show"} scene navigation</p>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        </div>
+                  {type.label}
+                </DropdownMenuItem>
+              ))}
+              <div className="border-t border-white/5 my-1" />
+              <DropdownMenuItem onClick={() => onInsertElement('heading')} className="cursor-pointer hover:bg-white/5">
+                <Plus className="h-4 w-4 mr-2" /> Insert Element
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-        {/* Middle section: Insert Elements - Dropdown on mobile, individual buttons on desktop */}
-        <div className="flex items-center gap-1">
-          {/* Mobile: Dropdown Menu */}
-          <div className="sm:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8 touch-manipulation text-gray-400 hover:text-white">
-                  <Plus className="h-4 w-4" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" className="w-48 bg-[#1E1E1E] border-gray-800 text-gray-300">
-                <DropdownMenuItem onClick={() => onInsertElement('heading')} className="cursor-pointer py-3 hover:bg-gray-800 focus:bg-gray-800">
-                  <Type className="h-4 w-4 mr-2" />
-                  <span>Scene Heading</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onInsertElement('action')} className="cursor-pointer py-3 hover:bg-gray-800 focus:bg-gray-800">
-                  <ListChecks className="h-4 w-4 mr-2" />
-                  <span>Action</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onInsertElement('character')} className="cursor-pointer py-3 hover:bg-gray-800 focus:bg-gray-800">
-                  <Camera className="h-4 w-4 mr-2" />
-                  <span>Character</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onInsertElement('dialogue')} className="cursor-pointer py-3 hover:bg-gray-800 focus:bg-gray-800">
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  <span>Dialogue</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
+
+          {/* Formatting Group */}
+          <div className="flex items-center gap-0.5">
+            <ToolbarButton icon={Bold} tooltip="Bold (Ctrl+B)" onClick={() => handleFormat('bold')} />
+            <ToolbarButton icon={Italic} tooltip="Italic (Ctrl+I)" onClick={() => handleFormat('italic')} />
+            <ToolbarButton icon={Underline} tooltip="Underline (Ctrl+U)" onClick={() => handleFormat('underline')} />
+            <ToolbarButton icon={Link2} tooltip="Link" onClick={handleInsertLink} />
+            <ToolbarButton icon={ImageIcon} tooltip="Image" onClick={handleInsertImage} />
           </div>
 
-          <div className="hidden sm:flex items-center gap-1">
-            {[
-              { type: 'heading', icon: Type, label: 'Add Scene Heading' },
-              { type: 'action', icon: ListChecks, label: 'Add Action' },
-              { type: 'character', icon: Camera, label: 'Add Character' },
-              { type: 'dialogue', icon: MessageSquare, label: 'Add Dialogue' },
-            ].map((item) => (
-              <TooltipProvider key={item.type}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-gray-400 hover:text-white"
-                      onClick={() => onInsertElement(item.type)}
-                    >
-                      <item.icon className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            ))}
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
 
-            <div className="w-[1px] h-4 bg-gray-700 mx-1" />
-
-            {/* Case Transformations */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-gray-400 hover:text-white"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      const event = new CustomEvent('script-transform-case', { detail: { mode: 'uppercase' } });
-                      document.dispatchEvent(event);
-                    }}
-                  >
-                    <CaseUpper className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Uppercase (Ctrl+Shift+U)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-gray-400 hover:text-white"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={() => {
-                      const event = new CustomEvent('script-transform-case', { detail: { mode: 'lowercase' } });
-                      document.dispatchEvent(event);
-                    }}
-                  >
-                    <CaseLower className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Lowercase (Ctrl+Shift+L)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+          {/* Alignment Group */}
+          <div className="flex items-center gap-0.5">
+            <ToolbarButton icon={AlignLeft} tooltip="Align Left" onClick={() => handleFormat('justifyLeft')} />
+            <ToolbarButton icon={AlignCenter} tooltip="Align Center" onClick={() => handleFormat('justifyCenter')} />
+            <ToolbarButton icon={AlignJustify} tooltip="Justify" onClick={() => handleFormat('justifyFull')} />
+            <ToolbarButton icon={List} tooltip="Bullet List" onClick={() => handleFormat('insertUnorderedList')} />
           </div>
 
-          {/* Pagination Controls */}
-          {totalPages !== undefined && totalPages > 1 && (
-            <div className="flex items-center gap-2 ml-4 px-3 py-1 bg-gray-800/40 rounded-full border border-gray-700/50">
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={onPrevPage}
-                      disabled={currentPage === 0}
-                      className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      PREV
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Previous Page</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
 
-              <div className="w-[1px] h-3 bg-gray-700/50" />
+          {/* Text Style Group */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="h-9 px-3 text-gray-400 hover:text-white hover:bg-white/5 flex items-center gap-2 font-bold"
+              >
+                <span>AA</span>
+                <ChevronDown className="h-4 w-4 opacity-50" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="bg-[#1f2937] border-white/10 text-gray-300">
+              <DropdownMenuItem 
+                className="hover:bg-white/5 hover:text-white cursor-pointer"
+                onClick={() => document.dispatchEvent(new CustomEvent('script-transform-case', { detail: { mode: 'uppercase' } }))}
+              >
+                UPPERCASE
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="hover:bg-white/5 hover:text-white cursor-pointer"
+                onClick={() => document.dispatchEvent(new CustomEvent('script-transform-case', { detail: { mode: 'lowercase' } }))}
+              >
+                lowercase
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="hover:bg-white/5 hover:text-white cursor-pointer"
+                onClick={() => document.dispatchEvent(new CustomEvent('script-transform-case', { detail: { mode: 'sentence' } }))}
+              >
+                Sentence case
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-              <span className="text-[10px] font-mono text-gray-500 min-w-[70px] text-center">
-                {currentPage !== undefined ? currentPage + 1 : 0} / {totalPages}
-              </span>
+          <div className="h-6 w-[1px] bg-white/10 mx-1" />
 
-              <div className="w-[1px] h-3 bg-gray-700/50" />
+          <ToolbarButton 
+            icon={SpellCheck} 
+            tooltip={`Auto-Correct: ${isAutoCorrectEnabled ? 'ON' : 'OFF'}`} 
+            onClick={toggleAutoCorrect} 
+            active={isAutoCorrectEnabled}
+          />
 
-              <TooltipProvider>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={onNextPage}
-                      disabled={currentPage === totalPages - 1}
-                      className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                    >
-                      NEXT
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent>Next Page</TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
-            </div>
-          )}
+          <ToolbarButton 
+            icon={MessageSquare} 
+            tooltip="Comments" 
+            onClick={() => document.dispatchEvent(new CustomEvent('toggle-comments-sidebar'))} 
+          />
         </div>
 
-        {/* Right section: Shortcuts & Zoom Controls (Hidden on mobile) */}
-        <div className="hidden sm:flex items-center gap-2">
-          {/* Shortcuts Button */}
-          <TooltipProvider>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 flex items-center gap-1.5 text-xs font-medium text-gray-400 hover:text-white bg-gray-800/50"
-                  onClick={() => {
-                    // Could open a help dialog here
-                  }}
-                >
-                  <Keyboard className="h-3.5 w-3.5" />
-                  <span>Shortcuts</span>
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent className="bg-[#1E1E1E] border-gray-800 text-gray-300">
-                <div className="space-y-1">
-                  <p className="font-semibold mb-1">Keyboard Shortcuts:</p>
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-1">
-                    <span>Heading: Ctrl/⌘+H</span>
-                    <span>Action: Ctrl/⌘+A</span>
-                    <span>Character: Ctrl/⌘+C</span>
-                    <span>Dialogue: Ctrl/⌘+D</span>
-                  </div>
-                </div>
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
+        {/* Right Section: Controls */}
+        <div className="flex items-center gap-3 flex-nowrap shrink-0 ml-auto">
+          {/* Pagination Controls moved to floating buttons in ScriptContentContainer */}
 
-          <div className="w-[1px] h-4 bg-gray-700 mx-1 hidden sm:block" />
+          <Button
+            variant="secondary"
+            className="h-9 bg-white/5 border border-white/10 text-gray-300 hover:bg-white/10 hover:text-white flex items-center gap-2 text-xs font-medium"
+          >
+            <Keyboard className="h-4 w-4" />
+            Shortcuts
+          </Button>
 
           <div className="flex items-center gap-1">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-gray-400 hover:text-white"
-                    onClick={() => {
-                      const newZoom = Math.max(50, parseInt(zoom) - 10);
-                      onZoomChange(`${newZoom}%`);
-                    }}
-                  >
-                    <ZoomOut className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Zoom Out</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            <Button variant="ghost" size="icon" className="h-9 w-9 text-gray-400 hover:text-white">
+              <Search className="h-4 w-4" />
+            </Button>
 
             <Select value={zoom} onValueChange={onZoomChange}>
-              <SelectTrigger className="w-[70px] sm:w-[80px] h-8 text-[11px] bg-gray-800 border-gray-700 text-gray-300">
+              <SelectTrigger className="h-9 w-[90px] bg-white/5 border-white/10 text-gray-300 hover:bg-white/10">
                 <SelectValue placeholder={zoom} />
               </SelectTrigger>
-              <SelectContent className="bg-[#1E1E1E] border-gray-800 text-gray-300">
-                <SelectItem value="50%">50%</SelectItem>
+              <SelectContent className="bg-[#1f2937] border-white/10 text-gray-300">
                 <SelectItem value="75%">75%</SelectItem>
                 <SelectItem value="100%">100%</SelectItem>
                 <SelectItem value="125%">125%</SelectItem>
                 <SelectItem value="150%">150%</SelectItem>
               </SelectContent>
             </Select>
-
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-gray-400 hover:text-white"
-                    onClick={() => {
-                      const newZoom = Math.min(200, parseInt(zoom) + 10);
-                      onZoomChange(`${newZoom}%`);
-                    }}
-                  >
-                    <ZoomIn className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Zoom In</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
           </div>
+
+          <Button variant="ghost" size="icon" className="h-9 w-9 text-gray-400 hover:text-white">
+            <Maximize2 className="h-4 w-4" />
+          </Button>
         </div>
       </div>
-    </div>
 
+      {/* Mobile element type switcher intentionally removed for cleaner mobile UX */}
+    </div>
   );
 };

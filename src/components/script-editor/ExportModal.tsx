@@ -25,12 +25,16 @@ interface ExportModalProps {
   title: string;
   elements: ScriptElementType[];
   trigger?: React.ReactNode;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
-export const ExportModal = ({ scriptId, title, elements, trigger }: ExportModalProps) => {
-  const { exportAsTXT, exportAsPDF, exportAsFountain, validateScriptContent } = useScriptExport();
+export const ExportModal = ({ scriptId, title, elements, trigger, open: externalOpen, onOpenChange: externalOnOpenChange }: ExportModalProps) => {
+  const { exportAsTXT, exportAsPDF, exportAsFountain, exportAsFDX, validateScriptContent } = useScriptExport();
   const { profile } = useProfile();
-  const [open, setOpen] = React.useState(false);
+  const [internalOpen, setInternalOpen] = React.useState(false);
+  const open = externalOpen !== undefined ? externalOpen : internalOpen;
+  const setOpen = externalOnOpenChange || setInternalOpen;
   const [isExporting, setIsExporting] = React.useState(false);
   const { toast } = useToast();
 
@@ -39,7 +43,7 @@ export const ExportModal = ({ scriptId, title, elements, trigger }: ExportModalP
     return validateScriptContent(elements);
   }, [elements, validateScriptContent]);
 
-  const handleQuickExport = async (format: 'txt' | 'pdf' | 'fountain') => {
+  const handleQuickExport = async (format: 'txt' | 'pdf' | 'fountain' | 'fdx') => {
     if (!contentValidation.isValid) {
       toast({
         title: "Cannot Export",
@@ -66,6 +70,9 @@ export const ExportModal = ({ scriptId, title, elements, trigger }: ExportModalP
           break;
         case 'fountain':
           await exportAsFountain(exportTitle, elements, authorName);
+          break;
+        case 'fdx':
+          await exportAsFDX(exportTitle, elements, authorName);
           break;
       }
 
@@ -202,7 +209,7 @@ export const ExportModal = ({ scriptId, title, elements, trigger }: ExportModalP
                 </div>
               )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 <Button
                   onClick={() => handleQuickExport('txt')}
                   variant="outline"
@@ -241,7 +248,21 @@ export const ExportModal = ({ scriptId, title, elements, trigger }: ExportModalP
                   <FileText className="h-10 w-10 mb-3 flex-shrink-0 text-primary" />
                   <span className="text-base font-semibold mb-1">Fountain</span>
                   <span className="text-xs text-muted-foreground text-center leading-tight">
-                    Industry standard screenplay format
+                    Industry standard format
+                  </span>
+                </Button>
+
+                <Button
+                  onClick={() => handleQuickExport('fdx')}
+                  variant="outline"
+                  className="flex flex-col h-auto min-h-[8rem] p-4 whitespace-normal hover:border-primary hover:bg-primary/5 transition-all"
+                  disabled={!contentValidation.isValid || isExporting}
+                  aria-label="Export as Final Draft"
+                >
+                  <FileText className="h-10 w-10 mb-3 flex-shrink-0 text-primary" />
+                  <span className="text-base font-semibold mb-1">Final Draft</span>
+                  <span className="text-xs text-muted-foreground text-center leading-tight">
+                    Standard Final Draft format
                   </span>
                 </Button>
               </div>

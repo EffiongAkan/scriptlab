@@ -47,34 +47,48 @@ export const EditorTabs = ({
 }: EditorTabsProps) => {
   return (
     <Tabs defaultValue="write" onValueChange={onTabChange} className="w-full h-full flex flex-col">
-      {/* Mobile: Compress TabsList, Desktop: Normal TabsList */}
-      <div className="overflow-x-auto bg-[#1E1E1E] md:bg-transparent border-b border-gray-800 md:border-none">
-        <TabsList className="grid w-full min-w-fit grid-cols-5 h-auto p-0 md:p-1 bg-transparent md:bg-muted">
-          <TabsTrigger value="write" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
-            <FileText className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="inline-block md:inline">Write</span>
+      {/* Centered Tabs List - Allow horizontal scroll on smaller windows to prevent side-cutoff */}
+      <div className="w-full bg-[#111827]/50 border-b border-white/5 py-1 flex justify-center overflow-x-auto no-scrollbar">
+        <TabsList className="bg-transparent h-10 gap-2 sm:gap-4 md:gap-8 flex-nowrap">
+          <TabsTrigger 
+            value="write" 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 data-[state=active]:text-white data-[state=active]:bg-white/5 transition-all rounded-md"
+          >
+            <FileText className="h-4 w-4" />
+            <span>Write</span>
           </TabsTrigger>
-          <TabsTrigger value="analysis" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
-            <BarChart3 className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="inline-block md:inline">Analyze</span>
+          <TabsTrigger 
+            value="analysis" 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 data-[state=active]:text-white data-[state=active]:bg-white/5 transition-all rounded-md"
+          >
+            <BarChart3 className="h-4 w-4" />
+            <span>Analyze</span>
           </TabsTrigger>
-          <TabsTrigger value="breakdown" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
-            <LayoutList className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="inline-block md:inline">Breakdown</span>
+          <TabsTrigger 
+            value="breakdown" 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 data-[state=active]:text-white data-[state=active]:bg-white/5 transition-all rounded-md"
+          >
+            <LayoutList className="h-4 w-4" />
+            <span>Breakdown</span>
           </TabsTrigger>
-
-          <TabsTrigger value="collaboration" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
-            <Users className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="inline-block md:inline">Collab</span>
+          <TabsTrigger 
+            value="collaboration" 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 data-[state=active]:text-white data-[state=active]:bg-white/5 transition-all rounded-md"
+          >
+            <Users className="h-4 w-4" />
+            <span>Collab</span>
           </TabsTrigger>
-          <TabsTrigger value="share" className="flex items-center gap-1 md:gap-2 px-1 py-1.5 md:px-3 md:py-2 text-[10px] md:text-sm data-[state=active]:bg-gray-800 md:data-[state=active]:bg-background">
-            <Share2 className="h-3 w-3 md:h-4 md:w-4" />
-            <span className="inline-block md:inline">Share</span>
+          <TabsTrigger 
+            value="share" 
+            className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-gray-400 data-[state=active]:text-white data-[state=active]:bg-white/5 transition-all rounded-md"
+          >
+            <Share2 className="h-4 w-4" />
+            <span>Share</span>
           </TabsTrigger>
         </TabsList>
       </div>
 
-      <TabsContent value="write" className="mt-0 md:mt-4 flex-1 h-full overflow-hidden min-h-0">
+      <TabsContent value="write" className="flex-1 h-full overflow-hidden min-h-0 m-0">
         <ScriptContentContainer
           title={title}
           scriptId={scriptId}
@@ -87,7 +101,7 @@ export const EditorTabs = ({
         />
       </TabsContent>
 
-      <TabsContent value="analysis" className="mt-0 md:mt-4 flex-1 h-full overflow-y-auto min-h-0">
+      <TabsContent value="analysis" className="flex-1 h-full overflow-y-auto min-h-0 m-0 p-6 bg-[#0f172a]">
         <ScriptAnalysisTabContent
           elements={elements}
           onApplySuggestion={onApplySuggestion}
@@ -99,40 +113,33 @@ export const EditorTabs = ({
         />
       </TabsContent>
 
-      <TabsContent value="breakdown" className="mt-0 md:mt-4 flex-1 h-full overflow-y-auto min-h-0">
+      <TabsContent value="breakdown" className="flex-1 h-full overflow-y-auto min-h-0 m-0 p-6 bg-[#0f172a]">
         <ScriptBreakdownPanel
           elements={elements}
           title={title}
         />
       </TabsContent>
 
-
-
-      <TabsContent value="collaboration" className="mt-2 md:mt-6">
+      <TabsContent value="collaboration" className="flex-1 h-full overflow-y-auto min-h-0 m-0 p-6 bg-[#0f172a]">
         <CollaborationPanel scriptId={scriptId} />
       </TabsContent>
 
-
-
-      <TabsContent value="share" className="mt-6">
-        <div className="space-y-6">
-          <div className="text-center">
-            <h3 className="text-lg font-semibold mb-4">Enhanced Sharing System</h3>
-            <p className="text-muted-foreground mb-6">
-              Create secure share links with custom permissions, email invitations, and advanced access controls.
-              Manage collaborator access and track engagement.
-            </p>
-            <ShareScriptModal
-              scriptId={scriptId}
-              scriptTitle={title}
-              trigger={
-                <Button size="lg" className="min-w-[200px]">
-                  <Share2 className="mr-2 h-5 w-5" />
-                  Advanced Sharing
-                </Button>
-              }
-            />
-          </div>
+      <TabsContent value="share" className="flex-1 h-full overflow-y-auto min-h-0 m-0 p-6 bg-[#0f172a]">
+        <div className="max-w-2xl mx-auto space-y-6 text-center py-12">
+          <h3 className="text-2xl font-bold text-white mb-4">Secure Sharing</h3>
+          <p className="text-gray-400 mb-8 text-lg">
+            Create secure share links with custom permissions, email invitations, and advanced access controls.
+          </p>
+          <ShareScriptModal
+            scriptId={scriptId}
+            scriptTitle={title}
+            trigger={
+              <Button size="lg" className="bg-blue-600 hover:bg-blue-500 text-white px-8 h-12 text-lg">
+                <Share2 className="mr-3 h-6 w-6" />
+                Advanced Sharing
+              </Button>
+            }
+          />
         </div>
       </TabsContent>
     </Tabs>

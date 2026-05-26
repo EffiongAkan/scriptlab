@@ -46,6 +46,7 @@ import { SubscriptionPlanManager } from '@/components/admin/SubscriptionPlanMana
 import { NotificationManager } from '@/components/admin/NotificationManager';
 import { AdminLevelManager } from '@/components/admin/AdminLevelManager';
 import { AdminInvitationManager } from '@/components/admin/AdminInvitationManager';
+import { SentryErrorViewer } from '@/components/admin/SentryErrorViewer';
 import { AdminSubscriptionPlan } from '../types/admin';
 import { useAdminAccess } from '@/hooks/useAdminAccess';
 import { AIModelSelector } from '@/components/admin/AIModelSelector';
@@ -116,6 +117,7 @@ export default function AdminDashboard() {
   // User Tab Management
   const [userSortBy, setUserSortBy] = useState<'email' | 'newest' | 'oldest' | 'credits' | 'scripts'>('newest');
   const [userViewMode, setUserViewMode] = useState<'grid' | 'list'>('grid');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const fetchSubscriptionPlans = async () => {
     try {
@@ -350,7 +352,17 @@ export default function AdminDashboard() {
   };
 
   const sortedUsers = React.useMemo(() => {
-    return [...users].sort((a, b) => {
+    let result = [...users];
+    
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(u => 
+        u.email.toLowerCase().includes(q) || 
+        (u.profile?.full_name && u.profile.full_name.toLowerCase().includes(q))
+      );
+    }
+
+    return result.sort((a, b) => {
       switch (userSortBy) {
         case 'email':
           return a.email.localeCompare(b.email);
@@ -366,7 +378,7 @@ export default function AdminDashboard() {
           return 0;
       }
     });
-  }, [users, userSortBy]);
+  }, [users, userSortBy, searchQuery]);
 
   const fetchSystemStats = async () => {
     try {
@@ -750,7 +762,7 @@ export default function AdminDashboard() {
           className="space-y-4"
         >
           <div className="overflow-x-auto -mx-2 px-2">
-            <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-9 h-auto flex-wrap md:flex-nowrap gap-1">
+            <TabsList className="inline-flex w-auto min-w-full md:grid md:grid-cols-10 h-auto flex-wrap md:flex-nowrap gap-1">
               {(isSuperAdmin || permissions.canManageUsers) && (
                 <TabsTrigger value="users" className="text-xs whitespace-nowrap">Users</TabsTrigger>
               )}
@@ -776,6 +788,9 @@ export default function AdminDashboard() {
                 <TabsTrigger value="system" className="text-xs whitespace-nowrap">System</TabsTrigger>
               )}
               {(isSuperAdmin || permissions.canManageSystem) && (
+                <TabsTrigger value="errors" className="text-xs whitespace-nowrap">Errors</TabsTrigger>
+              )}
+              {(isSuperAdmin || permissions.canManageSystem) && (
                 <TabsTrigger value="settings" className="text-xs whitespace-nowrap">Settings</TabsTrigger>
               )}
             </TabsList>
@@ -796,6 +811,14 @@ export default function AdminDashboard() {
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Input 
+                           placeholder="Search users..." 
+                           value={searchQuery}
+                           onChange={(e) => setSearchQuery(e.target.value)}
+                           className="h-8 w-full md:w-[200px] text-xs bg-muted/50 border-none focus-visible:ring-1"
+                        />
+                      </div>
                       <div className="flex items-center gap-2 bg-muted/50 p-1 rounded-lg">
                         <Select value={userSortBy} onValueChange={(v: any) => setUserSortBy(v)}>
                           <SelectTrigger className="w-[140px] h-8 text-xs">
@@ -850,6 +873,7 @@ export default function AdminDashboard() {
                               <th className="px-4 py-3">User</th>
                               <th className="px-4 py-3">Status</th>
                               <th className="px-4 py-3">Joined</th>
+                              <th className="px-4 py-3">Last Active</th>
                               <th className="px-4 py-3 text-center">Scripts</th>
                               <th className="px-4 py-3 text-center">Credits</th>
                               <th className="px-4 py-3 text-right">Actions</th>
@@ -880,6 +904,9 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
                                   {new Date(user.created_at).toLocaleDateString()}
+                                </td>
+                                <td className="px-4 py-3 text-muted-foreground whitespace-nowrap text-xs">
+                                  {user.activity?.last_active ? new Date(user.activity.last_active).toLocaleString() : 'Never'}
                                 </td>
                                 <td className="px-4 py-3 text-center font-mono">
                                   {user.activity?.scripts_count || 0}
@@ -1295,6 +1322,12 @@ export default function AdminDashboard() {
                   </div>
                 </CardContent>
               </Card>
+            </TabsContent>
+          )}
+
+          {(isSuperAdmin || permissions.canManageSystem) && (
+            <TabsContent value="errors" className="space-y-4">
+              <SentryErrorViewer />
             </TabsContent>
           )}
 

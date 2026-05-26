@@ -41,41 +41,51 @@ export const useCollaborators = (scriptId: string) => {
 
       abortControllerRef.current = new AbortController();
 
-      // Query collaborators with safe profile data
-      const { data, error } = await supabase
+      // Query collaborators first
+      const { data: collaboratorsData, error: collabError } = await supabase
         .from('script_collaborators')
-        .select(`
-          user_id,
-          profiles:user_id(
-            id,
-            username,
-            full_name,
-            email
-          )
-        `)
+        .select('user_id')
         .eq('script_id', scriptId)
         .abortSignal(abortControllerRef.current.signal);
           
-      if (error) {
-        throw error;
+      if (collabError) {
+        throw collabError;
       }
       
-      const formattedCollaborators: Collaborator[] = data?.map((item: any) => {
-        const profile = item.profiles;
-        return {
+      let formattedCollaborators: Collaborator[] = [];
+      
+      if (collaboratorsData && collaboratorsData.length > 0) {
+        const userIds = collaboratorsData.map(c => c.user_id);
+        
+        // Then fetch their profiles
+        const { data: profilesData, error: profilesError } = await supabase
+          .from('profiles')
+          .select('id, username, full_name, email')
+          .in('id', userIds)
+          .abortSignal(abortControllerRef.current.signal);
+          
+        if (profilesError) {
+          console.warn('Failed to load some collaborator profiles', profilesError);
+        }
+        
+        formattedCollaborators = profilesData?.map(profile => ({
           id: profile.id,
           email: profile.email || '',
           username: profile.username || profile.email?.split('@')[0] || 'Unknown User',
           status: 'offline' as const,
-        };
-      }) || [];
+        })) || [];
+      }
+
       
       // Cache the results
       cacheRef.current[scriptId] = formattedCollaborators;
       setCollaborators(formattedCollaborators);
       
     } catch (error: any) {
-      if (error.name === 'AbortError') {
+      const errorStr = typeof error === 'string' ? error : JSON.stringify(error) + (error?.message || '') + (error?.details || '') + (error?.name || '');
+      const isAbortError = errorStr.includes('AbortError') || errorStr.includes('aborted');
+
+      if (isAbortError) {
         console.log('Collaborator fetch aborted');
         return;
       }

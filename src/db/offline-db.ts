@@ -28,13 +28,13 @@ export interface SyncOperation {
   timestamp: number;
 }
 
-export class ScriptLabOfflineDB extends Dexie {
+export class ScriptynOfflineDB extends Dexie {
   scripts!: Table<OfflineScript>;
   script_elements!: Table<OfflineElement>;
   sync_queue!: Table<SyncOperation>;
 
   constructor() {
-    super('ScriptLabOfflineDB');
+    super('ScriptynOfflineDB');
     this.version(1).stores({
       scripts: 'id, user_id, updated_at, syncStatus',
       script_elements: 'id, script_id, position, updated_at, syncStatus',
@@ -43,7 +43,7 @@ export class ScriptLabOfflineDB extends Dexie {
   }
 }
 
-export const db = new ScriptLabOfflineDB();
+export const db = new ScriptynOfflineDB();
 
 // Helper to save current elements to offline DB
 export const saveElementsOffline = async (scriptId: string, elements: ScriptElementType[]) => {

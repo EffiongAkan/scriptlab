@@ -58,7 +58,7 @@ export const CopyrightManager: React.FC = () => {
     doc.text(`Script ID: ${item.script_id}`, 20, 60);
     doc.text(`Claim: ${item.copyright_claim}`, 20, 70);
     doc.text(`Registered: ${new Date(item.registered_at).toLocaleString()}`, 20, 80);
-    doc.text("This certificate confirms that the above copyright/IP claim was registered and timestamped in the ScriptLab system.", 20, 100, { maxWidth: 170 });
+    doc.text("This certificate confirms that the above copyright/IP claim was registered and timestamped in the Scriptyn system.", 20, 100, { maxWidth: 170 });
     doc.save(`copyright_certificate_${item.script_id}.pdf`);
   };
 

@@ -39,10 +39,10 @@ export const SubscriptionManager: React.FC = () => {
             id: plan.id as SubscriptionTier,
             name: plan.name,
             description: plan.description,
-            monthlyPrice: Number(plan.monthly_price),
-            yearlyPrice: Number(plan.yearly_price) || Number(plan.monthly_price) * 10,
-            features: plan.features || [],
-            limits: {
+            monthlyPrice: plan.id === 'pro' ? 15 : Number(plan.monthly_price),
+            yearlyPrice: plan.id === 'pro' ? 150 : (Number(plan.yearly_price) || Number(plan.monthly_price) * 10),
+            features: plan.id === 'pro' ? SUBSCRIPTION_PLANS.find(p => p.id === 'pro')?.features || [] : plan.features || [],
+            limits: plan.id === 'pro' ? SUBSCRIPTION_PLANS.find(p => p.id === 'pro')?.limits || { scripts: -1, aiCreditsPerMonth: 700, collaborators: 5, exports: -1 } : {
               scripts: plan.limits?.scripts || 0,
               aiCreditsPerMonth: plan.limits?.aiCreditsPerMonth || 0,
               collaborators: plan.limits?.collaborators || 0,
@@ -171,11 +171,16 @@ export const SubscriptionManager: React.FC = () => {
               className={`relative transition-all ${plan.popular ? 'border-primary shadow-lg' : ''} ${isCurrent ? 'ring-2 ring-primary' : ''}`}
             >
               {plan.popular && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+                <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-2">
                   <Badge className="bg-primary text-primary-foreground">
                     <Star className="h-3 w-3 mr-1" />
                     Most Popular
                   </Badge>
+                  {plan.id === 'pro' && (
+                    <Badge className="bg-red-500 hover:bg-red-600 text-white animate-pulse shadow-lg">
+                      Launch Promo!
+                    </Badge>
+                  )}
                 </div>
               )}
 
@@ -220,7 +225,9 @@ export const SubscriptionManager: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Upgrade to {upgradeTarget} Plan</DialogTitle>
             <DialogDescription>
-              You will be redirected to our secure payment partner, Paystack, to complete your subscription checkout. All plans are billed in USD.
+              You will be redirected to our secure payment partner, Paystack, to complete your subscription checkout securely.
+              {'\n\n'}
+              Please note: all plans are currently displayed in USD but charged in their NGN equivalent at checkout.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

@@ -135,6 +135,7 @@ export const SimpleScriptElement = ({
           </div>
         )}
         <SmartScriptInput
+          id={id}
           value={localContent}
           onChange={handleContentChange}
           onFocus={handleFocusInternal}

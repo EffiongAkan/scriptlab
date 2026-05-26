@@ -5,6 +5,7 @@ import type {
   ToastActionElement,
   ToastProps,
 } from "@/components/ui/toast"
+import { sanitizeErrorMessage } from "@/utils/errorSanitizer"
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 1000000
@@ -143,17 +144,38 @@ type Toast = Omit<ToasterToast, "id">
 function toast({ ...props }: Toast) {
   const id = genId()
 
-  const update = (props: ToasterToast) =>
+  // Sanitize title and description if they are strings to prevent secret leakage
+  let safeTitle = props.title;
+  if (typeof safeTitle === 'string') {
+      safeTitle = sanitizeErrorMessage(safeTitle);
+  } else if (safeTitle instanceof Error) {
+      safeTitle = sanitizeErrorMessage(safeTitle.message);
+  }
+
+  let safeDescription = props.description;
+  if (typeof safeDescription === 'string') {
+      safeDescription = sanitizeErrorMessage(safeDescription);
+  } else if (safeDescription instanceof Error) {
+      safeDescription = sanitizeErrorMessage(safeDescription.message);
+  }
+
+  const sanitizedProps = {
+      ...props,
+      title: safeTitle,
+      description: safeDescription
+  };
+
+  const update = (newProps: ToasterToast) =>
     dispatch({
       type: "UPDATE_TOAST",
-      toast: { ...props, id },
+      toast: { ...newProps, id },
     })
   const dismiss = () => dispatch({ type: "DISMISS_TOAST", toastId: id })
 
   dispatch({
     type: "ADD_TOAST",
     toast: {
-      ...props,
+      ...sanitizedProps,
       id,
       open: true,
       onOpenChange: (open) => {

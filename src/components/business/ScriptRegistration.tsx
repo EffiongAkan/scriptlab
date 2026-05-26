@@ -54,7 +54,7 @@ export const ScriptRegistration: React.FC = () => {
     doc.text(`Script Title: ${r.title || "Untitled"}`, 20, 50);
     doc.text(`Script ID: ${r.script_id}`, 20, 60);
     doc.text(`Registered: ${new Date(r.registered_at).toLocaleString()}`, 20, 70);
-    doc.text("This document certifies the registration of the above script in ScriptLab with a secure timestamp.", 20, 90, { maxWidth: 170 });
+    doc.text("This document certifies the registration of the above script in Scriptyn with a secure timestamp.", 20, 90, { maxWidth: 170 });
     doc.save(`script_certificate_${r.script_id}.pdf`);
   };
 

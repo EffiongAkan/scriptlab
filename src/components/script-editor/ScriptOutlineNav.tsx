@@ -5,7 +5,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScriptElementType } from '@/hooks/useScriptContent';
-import { ChevronRight, ChevronDown, FileText, Users, MapPin, Clock } from 'lucide-react';
+import { ChevronRight, ChevronDown, FileText, Users, MapPin, Clock, Trash2, CheckSquare, Square, X } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -14,14 +14,17 @@ interface ScriptOutlineNavProps {
   onElementClick?: (elementId: string) => void;
   onScrollToElement?: (elementId: string) => void;
   onReorder?: (sceneId: string, newPosition: number) => void;
+  onDeleteScenes?: (sceneIds: string[]) => void;
   className?: string;
 }
 
-export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, onReorder, className }: ScriptOutlineNavProps) => {
+export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, onReorder, onDeleteScenes, className }: ScriptOutlineNavProps) => {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set());
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [dropPosition, setDropPosition] = useState<'top' | 'bottom' | null>(null);
+  const [selectedSceneIds, setSelectedSceneIds] = useState<Set<string>>(new Set());
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Process elements into outline structure
   const outline = React.useMemo(() => {
@@ -68,6 +71,40 @@ export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, 
       newExpanded.add(sectionId);
     }
     setExpandedSections(newExpanded);
+  };
+
+  const toggleSceneSelection = (sceneId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const next = new Set(selectedSceneIds);
+    if (next.has(sceneId)) {
+      next.delete(sceneId);
+    } else {
+      next.add(sceneId);
+    }
+    setSelectedSceneIds(next);
+    setShowDeleteConfirm(false);
+  };
+
+  const selectAll = () => {
+    setSelectedSceneIds(new Set(outline.map(s => s.id)));
+    setShowDeleteConfirm(false);
+  };
+
+  const clearSelection = () => {
+    setSelectedSceneIds(new Set());
+    setShowDeleteConfirm(false);
+  };
+
+  const handleDeleteSelected = () => {
+    if (showDeleteConfirm) {
+      if (onDeleteScenes) {
+        onDeleteScenes(Array.from(selectedSceneIds));
+      }
+      setSelectedSceneIds(new Set());
+      setShowDeleteConfirm(false);
+    } else {
+      setShowDeleteConfirm(true);
+    }
   };
 
   const scrollToElement = (elementId: string) => {
@@ -165,6 +202,73 @@ export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, 
 
   return (
     <div className={cn("flex flex-col h-full bg-transparent text-gray-400", className)}>
+      {/* Multi-select action bar */}
+      {selectedSceneIds.size > 0 && (
+        <div className={cn(
+          "mx-2 mt-2 rounded-lg px-3 py-2 flex items-center justify-between gap-2 border transition-colors",
+          showDeleteConfirm
+            ? "bg-red-950/60 border-red-700/60"
+            : "bg-white/5 border-white/10"
+        )}>
+          <div className="flex items-center gap-2 min-w-0">
+            {showDeleteConfirm ? (
+              <span className="text-[10px] font-bold text-red-400 leading-tight">
+                Delete {selectedSceneIds.size} scene{selectedSceneIds.size > 1 ? 's' : ''}? This cannot be undone.
+              </span>
+            ) : (
+              <>
+                <CheckSquare className="h-3 w-3 text-[#00BFA5] flex-shrink-0" />
+                <span className="text-[10px] font-bold text-gray-300 truncate">
+                  {selectedSceneIds.size} scene{selectedSceneIds.size > 1 ? 's' : ''} selected
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-1 flex-shrink-0">
+            {!showDeleteConfirm && selectedSceneIds.size < outline.length && (
+              <button
+                onClick={selectAll}
+                className="text-[9px] font-bold text-[#00BFA5] hover:text-[#00BFA5]/80 uppercase tracking-wide px-1"
+              >
+                All
+              </button>
+            )}
+            {showDeleteConfirm ? (
+              <>
+                <button
+                  onClick={() => setShowDeleteConfirm(false)}
+                  className="text-[9px] font-bold text-gray-400 hover:text-gray-200 uppercase tracking-wide px-1"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-1"
+                >
+                  Confirm
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  onClick={handleDeleteSelected}
+                  className="flex items-center gap-1 text-[9px] font-bold text-red-400 hover:text-red-300 uppercase tracking-wide px-1"
+                >
+                  <Trash2 className="h-3 w-3" />
+                  Delete
+                </button>
+                <button
+                  onClick={clearSelection}
+                  className="p-0.5 text-gray-600 hover:text-gray-300"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <ScrollArea className="flex-1">
         <div className="p-2 space-y-1">
           {outline.length === 0 ? (
@@ -176,18 +280,23 @@ export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, 
               const isDragging = draggedIndex === index;
               const isDragOver = dragOverIndex === index;
               const isExpanded = expandedSections.has(scene.id);
+              const isSelected = selectedSceneIds.has(scene.id);
 
               return (
                 <div
                   key={scene.id}
                   className={cn(
-                    "group transition-all relative border border-transparent rounded-lg mb-1",
+                    "group transition-all relative border rounded-lg mb-1",
                     isDragging && "opacity-20",
                     isDragOver && dropPosition === 'top' && "border-t-[#00BFA5]",
                     isDragOver && dropPosition === 'bottom' && "border-b-[#00BFA5]",
-                    isExpanded ? "bg-white/5 border-white/5" : "hover:bg-white/5"
+                    isSelected
+                      ? "bg-[#00BFA5]/10 border-[#00BFA5]/40"
+                      : isExpanded
+                        ? "bg-white/5 border-white/5"
+                        : "border-transparent hover:bg-white/5"
                   )}
-                  draggable
+                  draggable={!isSelected}
                   onDragStart={handleDragStart(index)}
                   onDragOver={handleDragOver(index)}
                   onDragLeave={handleDragLeave}
@@ -195,7 +304,21 @@ export const ScriptOutlineNav = ({ elements, onElementClick, onScrollToElement, 
                   onDragEnd={handleDragEnd}
                 >
                   <div className="flex items-center p-2 gap-2 cursor-pointer" onClick={() => toggleSection(scene.id)}>
-                    <ChevronRight className={cn("h-3 w-3 transition-transform text-gray-600", isExpanded && "rotate-90 text-[#00BFA5]")} />
+                    {/* Checkbox — always visible when any scene is selected, else on hover */}
+                    <button
+                      onClick={(e) => toggleSceneSelection(scene.id, e)}
+                      className={cn(
+                        "flex-shrink-0 transition-opacity",
+                        selectedSceneIds.size > 0 ? "opacity-100" : "opacity-0 group-hover:opacity-100"
+                      )}
+                      aria-label={isSelected ? "Deselect scene" : "Select scene"}
+                    >
+                      {isSelected
+                        ? <CheckSquare className="h-3.5 w-3.5 text-[#00BFA5]" />
+                        : <Square className="h-3.5 w-3.5 text-gray-600 hover:text-gray-300" />
+                      }
+                    </button>
+                    <ChevronRight className={cn("h-3 w-3 transition-transform text-gray-600 flex-shrink-0", isExpanded && "rotate-90 text-[#00BFA5]")} />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between pointer-events-none">
                         <span className="text-[9px] font-bold text-gray-500 uppercase tracking-tighter">Scene {index + 1}</span>

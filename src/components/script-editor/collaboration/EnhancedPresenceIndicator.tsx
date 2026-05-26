@@ -6,7 +6,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Users, Eye, Edit3, MessageCircle, Clock } from 'lucide-react';
-import { useCollaboratorPresence } from '@/hooks/useCollaboratorPresence';
+import { useCollaboration } from '@/contexts/CollaborationContext';
 import { formatDistanceToNow } from 'date-fns';
 
 interface EnhancedPresenceIndicatorProps {
@@ -26,28 +26,26 @@ export const EnhancedPresenceIndicator: React.FC<EnhancedPresenceIndicatorProps>
   scriptId,
   currentUserId
 }) => {
-  const { collaborators } = useCollaboratorPresence(scriptId, []);
-  const [activities, setActivities] = useState<CollaboratorActivity[]>([]);
+  const { collaborators } = useCollaboration();
   const [showDetailedView, setShowDetailedView] = useState(false);
 
-  // Simulate real-time activity updates
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const newActivities: CollaboratorActivity[] = collaborators
-        .filter(collab => collab.id !== currentUserId && collab.status === 'online')
-        .map(collab => ({
-          userId: collab.id,
-          action: ['viewing', 'editing', 'commenting'][Math.floor(Math.random() * 3)] as any,
-          elementId: `element-${Math.floor(Math.random() * 10) + 1}`,
-          elementType: ['dialogue', 'action', 'heading'][Math.floor(Math.random() * 3)],
-          timestamp: new Date(Date.now() - Math.random() * 30000)
-        }));
+  const activeCollaborators = collaborators.filter(
+    collab => collab.id !== currentUserId && collab.status === 'online'
+  );
 
-      setActivities(newActivities);
-    }, 5000);
-
-    return () => clearInterval(interval);
-  }, [collaborators, currentUserId]);
+  // Derive real activities from presence state
+  const activities: CollaboratorActivity[] = activeCollaborators
+    .filter(collab => collab.editingElementId || collab.cursor)
+    .map(collab => {
+      const isEditing = !!collab.editingElementId;
+      return {
+        userId: collab.id,
+        action: isEditing ? 'editing' : 'viewing',
+        elementId: collab.editingElementId || collab.cursor?.elementId,
+        elementType: 'element',
+        timestamp: collab.last_seen ? new Date(collab.last_seen) : new Date()
+      };
+    });
 
   const getActivityIcon = (action: CollaboratorActivity['action']) => {
     switch (action) {
@@ -66,10 +64,6 @@ export const EnhancedPresenceIndicator: React.FC<EnhancedPresenceIndicatorProps>
       default: return 'bg-gray-100 text-gray-800';
     }
   };
-
-  const activeCollaborators = collaborators.filter(
-    collab => collab.id !== currentUserId && collab.status === 'online'
-  );
 
   return (
     <TooltipProvider>

@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthGuard } from "@/components/layout/AuthGuard";
 import { Layout } from "@/components/layout/Layout";
+import { ScrollToTop } from "@/components/layout/ScrollToTop";
 import Dashboard from "@/pages/Dashboard";
 import ScriptEditor from "@/pages/ScriptEditor";
 import PlotGenerator from "@/pages/PlotGenerator";
@@ -25,16 +26,25 @@ import SharedScriptReader from "@/pages/SharedScriptReader";
 import DebugAI from "@/pages/DebugAI";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useEffect } from "react";
+import { cleanupLegacyStorage } from "@/utils/storage-cleanup";
 
 import FeaturesPage from "@/pages/FeaturesPage";
 import HowItWorksPage from "@/pages/HowItWorksPage";
 import IndustriesPage from "@/pages/IndustriesPage";
 import PricingPage from "@/pages/PricingPage";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsOfUse from "@/pages/TermsOfUse";
 
 const queryClient = new QueryClient();
 
 const App = () => {
   usePostHogIdentity();
+
+  useEffect(() => {
+    // Critical fix: Clear legacy localStorage backups that might block Supabase Auth
+    cleanupLegacyStorage();
+  }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -42,12 +52,15 @@ const App = () => {
       <Toaster />
       <Sonner />
       <BrowserRouter>
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={<Index />} />
           <Route path="/features" element={<FeaturesPage />} />
           <Route path="/how-it-works" element={<HowItWorksPage />} />
           <Route path="/industries" element={<IndustriesPage />} />
           <Route path="/pricing" element={<PricingPage />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-use" element={<TermsOfUse />} />
           <Route path="/auth" element={<Auth />} />
           <Route
             path="/dashboard"

@@ -201,8 +201,8 @@ export const SystemSettingsManager: React.FC<SystemSettingsManagerProps> = ({
                                     <Label>Application Name</Label>
                                     <div className="flex gap-2">
                                         <Input
-                                            placeholder="ScriptLab"
-                                            defaultValue={settings.site_name || 'ScriptLab'}
+                                            placeholder="Scriptyn"
+                                            defaultValue={settings.site_name || 'Scriptyn'}
                                             onBlur={(e) => handleSave('site_name', e.target.value)}
                                         />
                                     </div>

@@ -1,5 +1,5 @@
 
-const CACHE_NAME = 'scriptlab-v1';
+const CACHE_NAME = 'scriptyn-v1';
 const ASSETS = [
   '/',
   '/index.html',

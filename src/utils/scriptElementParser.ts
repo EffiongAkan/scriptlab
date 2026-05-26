@@ -205,6 +205,9 @@ const formatCharacterName = (line: string): string => {
   // Remove any trailing colons or other punctuation
   formatted = formatted.replace(/[:\.\,\;]+$/, '');
 
+  // Strip age in brackets, e.g., (25), (30S), (LATE 20S) which AI sometimes incorrectly appends to the character name
+  formatted = formatted.replace(/\s*\([^)]*\d+[^)]*\)/g, '').trim();
+
   return formatted;
 };
 

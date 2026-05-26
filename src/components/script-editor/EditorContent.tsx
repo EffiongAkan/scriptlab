@@ -164,10 +164,22 @@ export function EditorContent() {
     fetchCharacters();
   }, [scriptId]);
 
-  // On first load, initialize history with loaded elements
+  // On first load, initialize history with loaded elements.
+  // If the script is brand-new (empty), seed it with a placeholder scene heading.
   useEffect(() => {
     if (isLoaded && loadedElements) {
-      initState(loadedElements); // Initialize history with fresh elements
+      if (loadedElements.length === 0) {
+        const placeholderHeading = {
+          id: crypto.randomUUID(),
+          type: 'heading' as const,
+          content: 'INT. LOCATION - DAY',
+          position: 0,
+          script_id: scriptId || '',
+        };
+        initState([placeholderHeading]);
+      } else {
+        initState(loadedElements);
+      }
     }
     // eslint-disable-next-line
   }, [isLoaded, loadedElements]);
@@ -210,6 +222,16 @@ export function EditorContent() {
       });
     }
   }, [scriptId, historyElements, saveScript, title, toast]);
+
+  // Listen for save shortcut events (Cmd/Ctrl + S)
+  useEffect(() => {
+    const handleSaveShortcut = () => {
+      handleSave();
+    };
+
+    document.addEventListener('script-save', handleSaveShortcut);
+    return () => document.removeEventListener('script-save', handleSaveShortcut);
+  }, [handleSave]);
 
   const handleUndo = useCallback(() => {
     undo();
@@ -348,36 +370,37 @@ export function EditorContent() {
                     console.log(`Modifying specific element: ${aiInitialSelection.elementId}`);
                     // Find index of element to replace
                     const targetIndex = currentElements.findIndex(e => e.id === aiInitialSelection.elementId);
-                    const targetElement = currentElements[targetIndex];
-
+                    
                     if (targetIndex !== -1) {
-                      let elementsToRemove = 1;
+                      const targetElement = currentElements[targetIndex];
+                      const aiReturnedScene = parsedElements.some(e => e.type === 'heading');
 
-                      // If the selected element is a heading, we replace the ENTIRE SCENE
-                      if (targetElement.type === 'heading') {
-                        console.log(`Heading selected (${targetElement.content}). Finding scene boundaries for replacement.`);
-                        // Find the index of the next heading or end of script
-                        let nextHeadingIndex = currentElements.findIndex((e, i) => i > targetIndex && e.type === 'heading');
-                        if (nextHeadingIndex !== -1) {
-                          elementsToRemove = nextHeadingIndex - targetIndex;
-                        } else {
-                          // It's the last scene
-                          elementsToRemove = currentElements.length - targetIndex;
+                      // If AI returned a heading, or user selected a heading, replace the ENTIRE SCENE
+                      if (aiReturnedScene || targetElement.type === 'heading') {
+                        console.log(`AI returned a scene or heading was selected. Replacing full scene.`);
+                        
+                        // Find the start of the scene containing targetIndex
+                        let sceneStartIndex = targetIndex;
+                        while (sceneStartIndex >= 0 && currentElements[sceneStartIndex].type !== 'heading') {
+                          sceneStartIndex--;
                         }
-                        console.log(`Replacing scene: removing ${elementsToRemove} elements starting at index ${targetIndex}`);
+                        if (sceneStartIndex < 0) sceneStartIndex = 0;
+
+                        // Find the end of the scene (next heading)
+                        let nextHeadingIndex = currentElements.findIndex((e, i) => i > sceneStartIndex && e.type === 'heading');
+                        
+                        let elementsToRemove = nextHeadingIndex !== -1 
+                          ? nextHeadingIndex - sceneStartIndex 
+                          : currentElements.length - sceneStartIndex;
+
+                        updatedElements.splice(sceneStartIndex, elementsToRemove, ...parsedElements);
+                        appliedCount = parsedElements.length;
                       } else {
+                        // Just replace the single element
                         console.log(`In-place replacement for single ${targetElement.type} element`);
+                        updatedElements.splice(targetIndex, 1, ...parsedElements);
+                        appliedCount = parsedElements.length;
                       }
-
-                      // Ensure parsed elements have correct new position relative to insertion
-                      const positionedParsedElements = parsedElements.map((el, i) => ({
-                        ...el,
-                        position: targetIndex + i
-                      }));
-
-                      // Replace at index (remove N, insert M)
-                      updatedElements.splice(targetIndex, elementsToRemove, ...positionedParsedElements);
-                      appliedCount = parsedElements.length;
                     } else {
                       console.warn(`Target element ${aiInitialSelection.elementId} not found, falling back to smart merge`);
                       // Fallback to smart merge below if element not found (rare race condition)
@@ -406,30 +429,53 @@ export function EditorContent() {
                       if (currentAIScene) aiScenes.push(currentAIScene);
 
                       if (aiScenes.length > 0) {
-                        // Process each AI scene
+                        const normalizeHeading = (h: string) => h.replace(/^(INT\.|EXT\.|INT\/EXT\.)/i, '').split('-')[0].trim();
+                        
+                        // Collect replacements to process from bottom to top to avoid index shifting bugs
+                        const replacements: { startIndex: number, elementsToRemove: number, newElements: typeof parsedElements }[] = [];
+                        const scenesToAppend: typeof parsedElements = [];
+
                         aiScenes.forEach(aiScene => {
-                          // Find if this scene exists in the current script
-                          const existingHeadingIndex = currentElements.findIndex(e =>
+                          let existingHeadingIndex = currentElements.findIndex(e =>
                             e.type === 'heading' && e.content.toUpperCase().trim() === aiScene.heading
                           );
 
-                          if (existingHeadingIndex !== -1) {
-                            console.log(`Matching scene found: ${aiScene.heading}. Replacing content...`);
+                          // Fuzzy match if exact match fails
+                          if (existingHeadingIndex === -1) {
+                            const aiNorm = normalizeHeading(aiScene.heading);
+                            existingHeadingIndex = currentElements.findIndex(e => 
+                              e.type === 'heading' && normalizeHeading(e.content.toUpperCase()) === aiNorm
+                            );
+                          }
 
-                            // Find the end of the existing scene
+                          if (existingHeadingIndex !== -1) {
+                            console.log(`Matching scene found for: ${aiScene.heading}. Tagging for replacement.`);
                             let existingSceneEnd = currentElements.findIndex((e, i) => i > existingHeadingIndex && e.type === 'heading');
                             if (existingSceneEnd === -1) existingSceneEnd = currentElements.length;
-
-                            // Replace the slice
-                            updatedElements.splice(existingHeadingIndex, existingSceneEnd - existingHeadingIndex, ...aiScene.elements);
-                            appliedCount += aiScene.elements.length;
+                            
+                            replacements.push({
+                              startIndex: existingHeadingIndex,
+                              elementsToRemove: existingSceneEnd - existingHeadingIndex,
+                              newElements: aiScene.elements
+                            });
                           } else {
-                            // Not found, append this scene
-                            console.log(`Scene ${aiScene.heading} not found, appending to bottom.`);
-                            updatedElements.push(...aiScene.elements);
-                            appliedCount += aiScene.elements.length;
+                            console.log(`Scene ${aiScene.heading} not found, will append to bottom.`);
+                            scenesToAppend.push(...aiScene.elements);
                           }
                         });
+
+                        // Sort descending by startIndex so splices don't affect previous indices
+                        replacements.sort((a, b) => b.startIndex - a.startIndex);
+                        
+                        replacements.forEach(rep => {
+                          updatedElements.splice(rep.startIndex, rep.elementsToRemove, ...rep.newElements);
+                          appliedCount += rep.newElements.length;
+                        });
+
+                        if (scenesToAppend.length > 0) {
+                          updatedElements.push(...scenesToAppend);
+                          appliedCount += scenesToAppend.length;
+                        }
                       } else {
                         // Fallback: AI returned metadata but no headings properly detected
                         updatedElements = [...currentElements, ...parsedElements];
@@ -498,9 +544,32 @@ export function EditorContent() {
               if (aiInitialSelection?.elementId) {
                 const idx = allElements.findIndex(e => e.id === aiInitialSelection.elementId);
                 if (idx !== -1) {
-                  const start = Math.max(0, idx - 20);
-                  const end = Math.min(allElements.length, idx + 20);
-                  return `Title: ${title}\nContext Around Selection:\n${allElements.slice(start, end).map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
+                  // Find all heading indices to demarcate scenes
+                  const headingIndices: number[] = [];
+                  allElements.forEach((el, i) => {
+                    if (el.type === 'heading') headingIndices.push(i);
+                  });
+
+                  // Find which scene the selection belongs to
+                  let currentSceneIndex = headingIndices.findIndex(hIdx => hIdx > idx) - 1;
+                  if (currentSceneIndex === -2) {
+                    currentSceneIndex = headingIndices.length - 1; // All headings are before idx
+                  }
+                  
+                  // Calculate start and end scene indices (10 before, 10 after)
+                  const startSceneIndex = Math.max(0, currentSceneIndex - 10);
+                  const endSceneIndex = Math.min(
+                    headingIndices.length - 1, 
+                    (currentSceneIndex === -1 ? 0 : currentSceneIndex) + 10
+                  );
+
+                  // Map scene indices back to array indices
+                  const start = startSceneIndex === 0 ? 0 : headingIndices[startSceneIndex];
+                  const end = (endSceneIndex + 1 < headingIndices.length) 
+                    ? headingIndices[endSceneIndex + 1] 
+                    : allElements.length;
+
+                  return `Title: ${title}\nContext Around Selection (Including surrounding scenes):\n${allElements.slice(start, end).map(e => `[${e.type.toUpperCase()}] ${e.content}`).join('\n')}`;
                 }
               }
 

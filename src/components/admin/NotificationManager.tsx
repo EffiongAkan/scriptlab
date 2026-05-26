@@ -358,7 +358,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
               <Input
                 value={templateSubject}
                 onChange={(e) => setTemplateSubject(e.target.value)}
-                placeholder="Welcome to ScriptLab!"
+                placeholder="Welcome to Scriptyn!"
               />
             </div>
 

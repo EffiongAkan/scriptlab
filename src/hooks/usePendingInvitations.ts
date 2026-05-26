@@ -78,9 +78,16 @@ export const usePendingInvitations = () => {
 
       userEmail = session.user.email;
 
-      // Subscribe with an email-specific filter so only relevant changes trigger updates
+      const channelName = `pending_invitations_${userEmail}`;
+      
+      // Aggressively clean up any existing channel with this exact name to prevent "already subscribed" errors on remount
+      const existingChannel = supabase.getChannels().find(c => c.topic === `realtime:${channelName}` || c.topic === channelName);
+      if (existingChannel) {
+        await supabase.removeChannel(existingChannel);
+      }
+
       channelRef = supabase
-        .channel(`pending_invitations_${userEmail}`)
+        .channel(channelName)
         .on('postgres_changes', {
           event: 'INSERT',
           schema: 'public',

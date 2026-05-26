@@ -6,6 +6,7 @@ import { ScriptHistoryProvider } from "@/contexts/ScriptHistoryContext";
 import { CollaborationProvider } from "@/contexts/CollaborationContext";
 import { EditorContent } from "@/components/script-editor/EditorContent";
 import { ErrorBoundary } from "@/components/script-editor/ErrorBoundary";
+import { LiveCursorSystem } from "@/components/script-editor/collaboration/LiveCursorSystem";
 
 export default function ScriptEditor() {
   const { scriptId } = useParams<{ scriptId: string }>();
@@ -28,6 +29,7 @@ export default function ScriptEditor() {
       <ScriptHistoryProvider>
         <ScriptEditorProvider>
           <CollaborationProvider scriptId={scriptId}>
+            <LiveCursorSystem scriptId={scriptId} />
             <EditorContent />
           </CollaborationProvider>
         </ScriptEditorProvider>

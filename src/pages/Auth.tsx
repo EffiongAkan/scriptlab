@@ -7,7 +7,13 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
+import { z } from "zod";
 import { AdminPasscodeClaim } from "@/components/admin/AdminPasscodeClaim";
+
+const authSchema = z.object({
+  email: z.string().email("Please enter a valid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters long"),
+});
 
 export default function Auth() {
   const navigate = useNavigate();
@@ -15,6 +21,7 @@ export default function Auth() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [activeTab, setActiveTab] = useState("signin");
+  const [validationErrors, setValidationErrors] = useState<{ email?: string; password?: string }>({});
   const { toast } = useToast();
 
   // Auto-redirect if already logged in (only from signin/signup tabs)
@@ -35,7 +42,12 @@ export default function Auth() {
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
+    
     try {
+      // Validate inputs
+      authSchema.parse({ email, password });
+      
       setLoading(true);
       const { error } = await supabase.auth.signUp({
         email,
@@ -52,6 +64,14 @@ export default function Auth() {
         description: "Check your email to confirm your account!",
       });
     } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        const errors: any = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) errors[err.path[0]] = err.message;
+        });
+        setValidationErrors(errors);
+        return;
+      }
       toast({
         title: "Error",
         description: error.message || "Error signing up",
@@ -64,7 +84,12 @@ export default function Auth() {
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
+    setValidationErrors({});
+    
     try {
+      // Basic validation for sign in (just format, not strict length in case of old accounts, but good practice)
+      z.object({ email: z.string().email("Invalid email address"), password: z.string().min(1, "Password is required") }).parse({ email, password });
+      
       setLoading(true);
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -85,6 +110,14 @@ export default function Auth() {
         navigate("/dashboard");
       }
     } catch (error: any) {
+      if (error instanceof z.ZodError) {
+        const errors: any = {};
+        error.errors.forEach(err => {
+          if (err.path[0]) errors[err.path[0]] = err.message;
+        });
+        setValidationErrors(errors);
+        return;
+      }
       toast({
         title: "Error",
         description: error.message || "Error signing in",
@@ -114,11 +147,9 @@ export default function Auth() {
 
       {/* Branding Header */}
       <header className="w-full py-6 px-8 flex items-center justify-between relative z-20">
-        <Link to="/" className="flex items-center gap-2 group transition-transform hover:scale-105">
-          <div className="bg-white p-1 rounded-lg flex items-center justify-center shadow-lg">
-            <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-8 w-auto min-w-[32px]" />
-          </div>
-          <span className="text-white font-bold text-2xl tracking-tight">ScriptLab</span>
+        <Link to="/" className="flex items-center gap-3 group transition-all hover:scale-105">
+          <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-11 w-auto min-w-[44px] drop-shadow-[0_0_12px_rgba(16,185,129,0.4)]" />
+          <span className="text-white font-extrabold text-2xl md:text-3xl tracking-tighter transition-colors group-hover:text-naija-gold">Scriptyn</span>
         </Link>
         <Link to="/" className="text-gray-400 hover:text-white font-medium transition-colors flex items-center gap-2">
           <span>Back to Home</span>
@@ -129,7 +160,7 @@ export default function Auth() {
         <div className="w-full max-w-md space-y-8">
           <Card className="bg-black/60 backdrop-blur-xl border-white/10 shadow-2xl overflow-hidden rounded-2xl ring-1 ring-white/5">
             <CardHeader className="pb-4 text-center">
-              <CardTitle className="text-3xl font-bold text-white tracking-tight">Welcome to <span className="text-naija-green">ScriptLab</span></CardTitle>
+              <CardTitle className="text-3xl font-bold text-white tracking-tight">Welcome to <span className="text-naija-green">Scriptyn</span></CardTitle>
               <CardDescription className="text-gray-400">Your AI-powered screenwriting studio</CardDescription>
             </CardHeader>
             <CardContent>
@@ -163,20 +194,22 @@ export default function Auth() {
                           type="email"
                           placeholder="Email Address"
                           value={email}
-                          onChange={(e) => setEmail(e.target.value)}
+                          onChange={(e) => { setEmail(e.target.value); setValidationErrors(prev => ({...prev, email: undefined})) }}
                           required
-                          className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all"
+                          className={`bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all ${validationErrors.email ? 'border-red-500/50' : ''}`}
                         />
+                        {validationErrors.email && <p className="text-red-400 text-xs mt-1">{validationErrors.email}</p>}
                       </div>
                       <div className="space-y-2">
                         <Input
                           type="password"
                           placeholder="Password"
                           value={password}
-                          onChange={(e) => setPassword(e.target.value)}
+                          onChange={(e) => { setPassword(e.target.value); setValidationErrors(prev => ({...prev, password: undefined})) }}
                           required
-                          className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all"
+                          className={`bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all ${validationErrors.password ? 'border-red-500/50' : ''}`}
                         />
+                        {validationErrors.password && <p className="text-red-400 text-xs mt-1">{validationErrors.password}</p>}
                       </div>
                     </div>
                     <Button
@@ -191,6 +224,12 @@ export default function Auth() {
                         </div>
                       ) : "Sign In"}
                     </Button>
+                    <p className="text-xs text-center text-gray-500 mt-4 leading-relaxed">
+                      By continuing, you agree to our{' '}
+                      <Link to="/terms-of-use" className="text-naija-green hover:underline">Terms of Use</Link>
+                      {' '}and{' '}
+                      <Link to="/privacy-policy" className="text-naija-green hover:underline">Privacy Policy</Link>.
+                    </p>
                   </form>
                 </TabsContent>
 
@@ -202,20 +241,22 @@ export default function Auth() {
                           type="email"
                           placeholder="Email Address"
                           value={email}
-                          onChange={(e) => setEmail(e.target.value)}
+                          onChange={(e) => { setEmail(e.target.value); setValidationErrors(prev => ({...prev, email: undefined})) }}
                           required
-                          className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all"
+                          className={`bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all ${validationErrors.email ? 'border-red-500/50' : ''}`}
                         />
+                        {validationErrors.email && <p className="text-red-400 text-xs mt-1">{validationErrors.email}</p>}
                       </div>
                       <div className="space-y-2">
                         <Input
                           type="password"
                           placeholder="Create Password"
                           value={password}
-                          onChange={(e) => setPassword(e.target.value)}
+                          onChange={(e) => { setPassword(e.target.value); setValidationErrors(prev => ({...prev, password: undefined})) }}
                           required
-                          className="bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all"
+                          className={`bg-white/5 border-white/10 text-white placeholder:text-gray-600 h-12 rounded-xl focus:border-naija-green/50 transition-all ${validationErrors.password ? 'border-red-500/50' : ''}`}
                         />
+                        {validationErrors.password && <p className="text-red-400 text-xs mt-1">{validationErrors.password}</p>}
                       </div>
                     </div>
                     <Button
@@ -230,6 +271,12 @@ export default function Auth() {
                         </div>
                       ) : "Create Account"}
                     </Button>
+                    <p className="text-xs text-center text-gray-500 mt-4 leading-relaxed">
+                      By continuing, you agree to our{' '}
+                      <Link to="/terms-of-use" className="text-naija-green hover:underline">Terms of Use</Link>
+                      {' '}and{' '}
+                      <Link to="/privacy-policy" className="text-naija-green hover:underline">Privacy Policy</Link>.
+                    </p>
                   </form>
                 </TabsContent>
 

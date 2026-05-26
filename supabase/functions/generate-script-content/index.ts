@@ -123,12 +123,50 @@ serve(async (req) => {
     
     CRITICAL INSTRUCTIONS:
     1. Write LIGHT AND CONCISE action lines. DO NOT write heavy, bulky, or overly detailed action descriptions.
-    2. CHARACTER INTRODUCTIONS: The first time a character appears in an action line, their name MUST be in ALL CAPS.
-    3. FOR NOLLYWOOD/NIGERIAN SCRIPTS: 
+    2. CHARACTER INTRODUCTIONS: The FIRST TIME a character physically appears in an action line, write their name in ALL CAPS followed by their age in brackets. Example: EMEKA (45) strides into the room. On all subsequent appearances in the same scene or script, write their name normally without the age tag.
+    3. FOR NOLLYWOOD/NIGERIAN SCRIPTS — THESE RULES ARE ABSOLUTE AND NON-NEGOTIABLE:
+
+       BANNED LOCATIONS (never write scenes in these places):
+       - Art galleries
+       - Markets or market scenes of any kind
+       - Cafés or coffee shops
+       - Hallways
+       Use instead: living rooms, offices, compounds, churches, courts, hotels, restaurants, corridors, courtyards, hospitals, cars, roads, banks, etc.
+
+       LANGUAGE RULES — USE BRITISH/NIGERIAN ENGLISH ONLY:
+       - NEVER use American English words. Use the British/Nigerian equivalent:
+         * "hallway" → "corridor"
+         * "café" / "coffee shop" → "restaurant" or "eatery"
+         * "walkway" → "corridor" or "passage"
+         * "coffee" → "tea" or remove entirely
+         * "apartment" → "flat"
+         * "elevator" → "lift"
+         * "sidewalk" → "pavement"
+         * "cell phone" → "mobile phone"
+         * "drugstore" → "pharmacy" or "chemist"
+         * "candy" → "sweets"
+         * "trash" → "rubbish"
+         * "gas" → "petrol"
+         * "truck" → "lorry"
+         * "vacation" → "holiday"
+         * "fall" (season) → "autumn"
+         * "soccer" → "football"
+         * "high school" → "secondary school"
+         * "cookie" → "biscuit"
+         * "store" → "shop"
+       - Characters must speak and think in Nigerian/British English at all times.
+       - No American slang, idioms or expressions.
+
+       OTHER NOLLYWOOD RULES:
        - NO pidgin dialogues unless the user explicitly selects it or the plot strictly requires it.
-       - NO market scenes.
        - NO use of juju/magic/witchcraft.
        - NO use of Nigerian proverbs anywhere in the script.
+
+       OPENING SCENE RULE — CRITICAL:
+       - The VERY FIRST SCENE of every Nollywood script MUST be intense, explosive, dramatic and immediately gripping.
+       - It must create instant tension that hooks the viewer and makes it impossible to look away.
+       - Use conflict, danger, shocking revelation, confrontation, or high-stakes drama from the very first line.
+       - NEVER open with a quiet, calm, or mundane scene. Every Nollywood script must open with a BANG.
 
     ALWAYS use the following tag format for EVERY element:
     [SCENE] INT./EXT. LOCATION - TIME

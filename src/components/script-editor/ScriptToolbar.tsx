@@ -1,17 +1,18 @@
 import React from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Save, Undo2, Redo2, Keyboard, AlertCircle, Sparkles, Clock, Users, Menu, FileUp, Settings2, CaseUpper, CaseLower } from "lucide-react";
+import { Save, Undo2, Redo2, Keyboard, AlertCircle, Sparkles, Clock, Users, Menu, FileUp, Settings2, CaseUpper, CaseLower, SpellCheck, Pencil, ChevronDown } from "lucide-react";
 import { useScriptContent } from "@/hooks/useScriptContent";
 import { useToast } from "@/hooks/use-toast";
 import { useScriptHistory } from "@/contexts/ScriptHistoryContext";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { ExportModal } from "@/components/script-editor/ExportModal";
 import { TreatmentGeneratorModal } from "@/components/script-editor/TreatmentGeneratorModal";
-import { MoreHorizontal } from "lucide-react";
+import { MoreHorizontal, CloudOff, RefreshCw } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { FileText } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSyncStatus } from "@/contexts/SyncStatusContext";
 
 interface ScriptToolbarProps {
   scriptId: string;
@@ -49,6 +50,8 @@ export const ScriptToolbar = ({
   } = useScriptContent(scriptId);
 
   const [isTreatmentModalOpen, setIsTreatmentModalOpen] = React.useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = React.useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const {
     toast
   } = useToast();
@@ -58,6 +61,18 @@ export const ScriptToolbar = ({
     canUndo: contextCanUndo,
     canRedo: contextCanRedo
   } = useScriptHistory();
+  const { isOnline, isSyncing, pendingSyncCount } = useSyncStatus();
+
+  const [isAutoCorrectEnabled, setIsAutoCorrectEnabled] = React.useState(() => {
+    const saved = localStorage.getItem('autocorrect-enabled');
+    return saved !== null ? JSON.parse(saved) : true;
+  });
+
+  React.useEffect(() => {
+    const handleToggle = () => setIsAutoCorrectEnabled((prev: boolean) => !prev);
+    document.addEventListener('autocorrect-toggle', handleToggle);
+    return () => document.removeEventListener('autocorrect-toggle', handleToggle);
+  }, []);
 
   // Calculate effective values falling back to context
   const effectiveCanUndo = propCanUndo ?? contextCanUndo ?? false;
@@ -137,15 +152,18 @@ export const ScriptToolbar = ({
       <div className="hidden md:flex justify-between items-center py-4 border-b border-gray-700 w-full gap-2 px-0 bg-[#1A1A1A] sticky top-0 z-40">
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 md:gap-3">
-            {/* Editable Title */}
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => onTitleChange?.(e.target.value)}
-              className="text-base md:text-3xl font-bold tracking-tight text-gray-300 bg-transparent border-none hover:bg-gray-800/50 rounded px-1 focus:ring-2 focus:ring-naija-green focus:outline-none w-full min-w-[120px] max-w-full relative z-10 pointer-events-auto cursor-text truncate"
-              placeholder="Untitled Script"
-              aria-label="Script Title"
-            />
+            {/* Editable Title with pencil icon */}
+            <div className="flex items-center gap-2 group">
+              <input
+                type="text"
+                value={title}
+                onChange={(e) => onTitleChange?.(e.target.value)}
+                className="text-base md:text-2xl font-bold tracking-tight text-gray-100 bg-transparent border-none hover:bg-gray-800/50 rounded px-1 focus:ring-2 focus:ring-naija-green focus:outline-none min-w-[120px] max-w-full relative z-10 pointer-events-auto cursor-text uppercase"
+                placeholder="Untitled Script"
+                aria-label="Script Title"
+              />
+              <Pencil className="h-4 w-4 text-gray-500 group-hover:text-gray-300 transition-colors cursor-pointer flex-shrink-0" onClick={() => {}} />
+            </div>
 
             {/* Desktop Status indicators */}
             <div className="hidden md:flex items-center gap-2 shrink-0">
@@ -166,7 +184,7 @@ export const ScriptToolbar = ({
 
           <div className="hidden md:flex flex-wrap items-center gap-2 md:gap-4 mt-1">
             <p className="text-muted-foreground text-sm">
-              Professional screenplay formatting for African storytellers
+              Professional screenplay formatting for storytellers
             </p>
 
             {/* Content and save status */}
@@ -183,6 +201,20 @@ export const ScriptToolbar = ({
                 <span>Unsaved changes</span>
               </span>}
 
+              {/* Offline & Syncing Status */}
+              {!isOnline && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-500 text-xs font-medium border border-amber-500/20">
+                  <CloudOff className="h-3 w-3" />
+                  <span>Offline (Saved Locally{pendingSyncCount > 0 ? `, ${pendingSyncCount} pending` : ''})</span>
+                </span>
+              )}
+              {isOnline && isSyncing && (
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-xs font-medium border border-blue-500/20">
+                  <RefreshCw className="h-3 w-3 animate-spin" />
+                  <span>Syncing to Cloud...</span>
+                </span>
+              )}
+
               {/* Active users badge */}
               <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-medium border border-blue-500/20">
                 <Users className="h-3 w-3" />
@@ -194,79 +226,55 @@ export const ScriptToolbar = ({
 
         <div className="flex items-center gap-1.5 md:gap-2 shrink-0">
 
-          {/* Desktop specific buttons */}
-          <div className="hidden md:flex items-center gap-2">
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" onClick={handleUndo} disabled={!effectiveCanUndo || isSaving} className="h-10 w-10 border-gray-700 hover:bg-gray-800">
-                    <Undo2 className="h-4 w-4" />
+            <div className="hidden md:flex items-center gap-1.5 md:gap-2">
+              <Button 
+                variant="outline" 
+                onClick={handleSave} 
+                disabled={isSaving || !isLoaded} 
+                className="h-10 px-3 min-w-[100px] border-gray-700 hover:bg-gray-800 text-sm"
+              >
+                <Save className="h-4 w-4 mr-2" />
+                {isSaving ? "Saving..." : "Save"}
+              </Button>
+
+              <ExportModal
+                scriptId={scriptId}
+                title={title}
+                elements={elements || []}
+                trigger={
+                  <Button variant="outline" disabled={isSaving || !isLoaded} className="h-10 px-3 min-w-[100px] border-gray-700 hover:bg-gray-800 text-sm">
+                    Export
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Undo (Ctrl/⌘ + Z)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+                }
+              />
+            </div>
 
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button variant="outline" size="icon" onClick={handleRedo} disabled={!effectiveCanRedo || isSaving} className="h-10 w-10 border-gray-700 hover:bg-gray-800">
-                    <Redo2 className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Redo (Ctrl/⌘ + Shift + Z)</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {/* Main Actions (AI & Treatment) */}
+            <Button
+              className="h-7 w-7 md:h-10 md:w-auto md:px-3 text-[10px] md:text-sm rounded-full md:rounded-md bg-teal-600 hover:bg-teal-500 text-white p-0 md:min-w-[130px] shadow-lg shadow-teal-900/20 flex items-center justify-center shrink-0 gap-1.5"
+              onClick={() => {
+                document.dispatchEvent(new CustomEvent('toggle-ai-prompt'));
+              }}
+              aria-label="AI Assistant"
+            >
+              <Sparkles className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="md:block hidden">Modify Script</span>
+            </Button>
 
-            <ExportModal
-              scriptId={scriptId}
-              title={title}
-              elements={elements || []}
-              trigger={
-                <Button variant="outline" disabled={isSaving || !isLoaded} className="h-10 px-3 min-w-[100px] border-gray-700 hover:bg-gray-800 text-sm">
-                  Export
-                </Button>
-              }
-            />
-
-
+            <Button
+              className="h-7 w-7 md:h-10 md:w-auto md:px-3 text-[10px] md:text-sm rounded-full md:rounded-md bg-naija-gold hover:bg-yellow-500 text-black p-0 md:min-w-[120px] shadow-lg shadow-yellow-900/20 flex items-center justify-center shrink-0 gap-1.5"
+              onClick={() => setIsTreatmentModalOpen(true)}
+              aria-label="Treatment"
+            >
+              <FileText className="h-3 w-3 md:h-4 md:w-4" />
+              <span className="md:block hidden">Treatment</span>
+            </Button>
           </div>
-
-          {/* Main Actions (Save & AI) */}
-          <Button className="h-7 w-7 md:h-10 md:w-auto md:px-3 text-[10px] md:text-sm rounded-full md:rounded-md bg-naija-green hover:bg-naija-green-dark text-white p-0 md:min-w-[100px] flex items-center justify-center shrink-0" onClick={handleSave} disabled={isSaving || !isLoaded} aria-label="Save">
-            <Save className="h-3 w-3 md:h-4 md:w-4 md:mr-2" />
-            <span className="md:block hidden">{isSaving ? "Saving..." : "Save"}</span>
-          </Button>
-
-          <Button
-            className="h-7 w-7 md:h-10 md:w-auto md:px-3 text-[10px] md:text-sm rounded-full md:rounded-md bg-emerald-600 hover:bg-emerald-500 text-white p-0 md:min-w-[120px] shadow-lg shadow-emerald-900/20 flex items-center justify-center shrink-0"
-            onClick={() => {
-              document.dispatchEvent(new CustomEvent('toggle-ai-prompt'));
-            }}
-            aria-label="AI Assistant"
-          >
-            <Sparkles className="h-3 w-3 md:h-4 md:w-4 md:mr-2" />
-            <span className="md:block hidden">Modify Script</span>
-          </Button>
-
-          <Button
-            className="h-7 w-7 md:h-10 md:w-auto md:px-3 text-[10px] md:text-sm rounded-full md:rounded-md bg-naija-gold hover:bg-yellow-500 text-black p-0 md:min-w-[120px] shadow-lg shadow-yellow-900/20 flex items-center justify-center shrink-0"
-            onClick={() => setIsTreatmentModalOpen(true)}
-            aria-label="Treatment"
-          >
-            <FileText className="h-3 w-3 md:h-4 md:w-4 md:mr-2" />
-            <span className="md:block hidden">Treatment</span>
-          </Button>
         </div>
-      </div>
 
       {/* Mobile Floating Action Button - Only visible on mobile */}
-      <div className="md:hidden fixed bottom-44 right-6 z-[100]">
-        <DropdownMenu>
+      <div className="md:hidden fixed bottom-56 right-6 z-[100]">
+        <DropdownMenu open={isMobileMenuOpen} onOpenChange={setIsMobileMenuOpen}>
           <DropdownMenuTrigger asChild>
             <Button className="h-14 w-14 rounded-full bg-naija-green hover:bg-naija-green-dark text-white shadow-2xl flex items-center justify-center border-2 border-white/20">
               <Settings2 className="h-6 w-6" />
@@ -280,8 +288,10 @@ export const ScriptToolbar = ({
             <DropdownMenuItem onClick={handleSave} disabled={isSaving || !isLoaded} className="cursor-pointer py-3 rounded-md focus:bg-naija-green focus:text-white">
               <Save className="h-4 w-4 mr-3" />
               <div className="flex flex-col">
-                <span className="font-semibold">{isSaving ? "Saving..." : "Save Project"}</span>
+                <span className="font-semibold">{isSaving ? "Saving..." : (!isOnline ? "Save Locally" : "Save Project")}</span>
                 {lastSavedAt && <span className="text-[10px] opacity-70">Last: {formatLastSavedTime()}</span>}
+                {!isOnline && <span className="text-[10px] text-amber-500 mt-0.5 flex items-center gap-1"><CloudOff className="h-2 w-2" /> Offline Mode</span>}
+                {isOnline && isSyncing && <span className="text-[10px] text-blue-400 mt-0.5 flex items-center gap-1"><RefreshCw className="h-2 w-2 animate-spin" /> Syncing...</span>}
               </div>
             </DropdownMenuItem>
 
@@ -302,29 +312,6 @@ export const ScriptToolbar = ({
             </DropdownMenuItem>
 
             <div className="my-1 border-t border-gray-800" />
-
-            <div className="grid grid-cols-2 gap-1 p-1">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleUndo}
-                disabled={!effectiveCanUndo || isSaving}
-                className="h-10 flex flex-col items-center justify-center gap-1 text-[10px]"
-              >
-                <Undo2 className="h-4 w-4" />
-                Undo
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRedo}
-                disabled={!effectiveCanRedo || isSaving}
-                className="h-10 flex flex-col items-center justify-center gap-1 text-[10px]"
-              >
-                <Redo2 className="h-4 w-4" />
-                Redo
-              </Button>
-            </div>
 
             <div className="my-1 border-t border-gray-800" />
 
@@ -355,21 +342,16 @@ export const ScriptToolbar = ({
 
             <div className="my-1 border-t border-gray-800" />
 
-            {/* Using a custom item for Export since it requires trigger wrapping */}
-            <ExportModal
-              scriptId={scriptId}
-              title={title}
-              elements={elements || []}
-              trigger={
-                <button
-                  className="w-full text-left relative flex cursor-default select-none items-center rounded-md px-2 py-3 text-sm outline-none transition-colors hover:bg-gray-800 hover:text-white bg-transparent"
-                  disabled={isSaving || !isLoaded}
-                >
-                  <FileUp className="h-4 w-4 mr-3" />
-                  <span>Export Script</span>
-                </button>
-              }
-            />
+            <DropdownMenuItem
+              className="cursor-pointer py-3 rounded-md focus:bg-gray-800 focus:text-white flex items-center"
+              disabled={isSaving || !isLoaded}
+              onSelect={() => {
+                setIsExportModalOpen(true);
+              }}
+            >
+              <FileUp className="h-4 w-4 mr-3" />
+              <span>Export Script</span>
+            </DropdownMenuItem>
 
 
 
@@ -404,6 +386,15 @@ export const ScriptToolbar = ({
             throw err;
           }
         }}
+      />
+
+      <ExportModal
+        scriptId={scriptId}
+        title={title}
+        elements={elements || []}
+        open={isExportModalOpen}
+        onOpenChange={setIsExportModalOpen}
+        trigger={<div className="hidden" />}
       />
     </>
   );

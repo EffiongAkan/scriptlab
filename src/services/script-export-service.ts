@@ -72,17 +72,17 @@ export class ScriptExportService {
     let yPosition = 1; // Start content at 1 inch
 
     // Set courier font for screenplay standard
-    pdf.setFont("courier");
+    pdf.setFont("Courier");
     pdf.setFontSize(12);
 
     // Add title page if requested
     if (options.includeCoverPage) {
       pdf.setFontSize(16);
-      pdf.setFont("courier", "bold");
+      pdf.setFont("Courier", "bold");
       pdf.text(title.toUpperCase(), pageWidth / 2, pageHeight / 3, { align: "center" });
 
       pdf.setFontSize(12);
-      pdf.setFont("courier", "normal");
+      pdf.setFont("Courier", "normal");
       pdf.text("Written by", pageWidth / 2, (pageHeight / 3) + 1, { align: "center" });
 
       // We don't have author name in options, so standard placeholder or check if passed
@@ -119,78 +119,133 @@ export class ScriptExportService {
     applyWatermark();
 
     // Process script elements
-    pdf.setFont("courier", "normal");
+    pdf.setFont("Courier", "normal");
     pdf.setFontSize(12);
 
     const validElements = elements.filter(el => el && el.content && el.content.trim() !== '');
-    const fontSize = 12; // Current font size
-    const lineHeight = fontSize * 0.0166666667; // 12pt font, 12pt leading (1/6 inch)
+    yPosition = 1;
+    const bottomMargin = 10; // Letter size (11) minus 1 inch bottom margin
+    // True 12pt Courier line height: 12pt = 1/6 inch = 0.1667in
+    const lineHeight = 0.1667;
     let sceneCount = 0;
+    let pageNumber = 1;
+    
+    // Print first page number if needed
+    if (options.pageNumbers) {
+      const pageNumText = options.includeCoverPage ? '1.' : '1.';
+      pdf.setFont("Courier", "normal");
+      pdf.setFontSize(10);
+      pdf.text(pageNumText, 7.5, 0.5);
+    }
 
-    validElements.forEach(element => {
-      // Check for new page
-      if (yPosition > pageHeight - options.margins.bottom) { // Use options.margins.bottom
-        pdf.addPage();
-        applyWatermark();
-        yPosition = 1; // 1 inch top margin
-      }
-
+    validElements.forEach((element, index) => {
       const content = element.content.trim();
       let xPosition = 1;
+      let fontSize = 12;
+      let spaceBefore = 0;
 
-      pdf.setFontSize(12); switch (element.type) {
+      // Determine space before this element based on type and previous element
+      if (index > 0) {
+        const prevType = validElements[index - 1].type;
+        
+        if (element.type === 'heading') {
+          spaceBefore = lineHeight * 2; // Double space before heading
+        } else if (element.type === 'character') {
+          // Increase space before character if it follows an action line
+          if (prevType === 'action') {
+            spaceBefore = lineHeight * 2; // Doubled space
+          } else {
+            spaceBefore = lineHeight; 
+          }
+        } else if (element.type === 'action') {
+           // Increase space before action if it follows dialogue
+          if (prevType === 'dialogue') {
+            spaceBefore = lineHeight * 2; // Doubled space
+          } else {
+            spaceBefore = lineHeight;
+          }
+        } else if (element.type === 'transition') {
+          spaceBefore = lineHeight * 2;
+        } else if (element.type === 'dialogue' || element.type === 'parenthetical') {
+          // Dialogue follows Character or Parenthetical with 0 blank lines
+          spaceBefore = 0; 
+        }
+      }
+
+      // Define specific widths for element types to ensure proper right margins
+      let maxWidth = 6.5; // Default width (Action)
+      switch (element.type) {
+        case 'dialogue': maxWidth = 3.5; break;
+        case 'parenthetical': maxWidth = 2.5; break;
+        case 'character': maxWidth = 4.0; break;
+        case 'transition': maxWidth = 2.0; break;
+        case 'action':
         case 'heading':
-          pdf.setFont("courier", "bold");
+        default: maxWidth = 6.5; break;
+      }
+
+      const splitText = pdf.splitTextToSize(content, maxWidth);
+      
+      // Orphan prevention: If it's a heading or character, ensure we have enough room for at least 2 more lines below it
+      const extraRoomNeeded = (element.type === 'heading' || element.type === 'character') ? (lineHeight * 3) : 0;
+      
+      // Check if we need to page break before printing
+      if (yPosition + spaceBefore + (splitText.length * lineHeight) + extraRoomNeeded > bottomMargin) {
+        pdf.addPage();
+        applyWatermark();
+        pageNumber++;
+        yPosition = 1; // Reset to top margin
+        spaceBefore = 0; // Don't add space at the top of a new page
+        
+        if (options.pageNumbers) {
+          pdf.setFont("Courier", "normal");
+          pdf.setFontSize(10);
+          pdf.text(`${pageNumber}.`, 7.5, 0.5); // Right top corner
+        }
+      }
+
+      yPosition += spaceBefore;
+
+      pdf.setFontSize(fontSize);
+
+      switch (element.type) {
+        case 'heading':
+          pdf.setFont("Courier", "bold");
           xPosition = 1;
-          yPosition += 0.3; // Extra space before heading
           sceneCount++;
-          // Scene Numbers in Margins
+          // Draw scene numbers on both sides
           pdf.setFontSize(10);
           pdf.text(sceneCount.toString(), 0.7, yPosition);
           pdf.text(sceneCount.toString(), 7.8, yPosition);
-          pdf.setFontSize(12);
+          pdf.setFontSize(fontSize);
           break;
         case 'action':
-          pdf.setFont("courier", "normal");
+          pdf.setFont("Courier", "normal");
           xPosition = 1;
           break;
         case 'character':
-          pdf.setFont("courier", "bold");
+          pdf.setFont("Courier", "bold");
           xPosition = 3.7;
-          yPosition += 0.2; // Space before character
           break;
         case 'dialogue':
-          pdf.setFont("courier", "normal");
+          pdf.setFont("Courier", "normal");
           xPosition = 2.5;
           break;
         case 'parenthetical':
-          pdf.setFont("courier", "italic");
+          pdf.setFont("Courier", "italic");
           xPosition = 3.2;
           break;
         case 'transition':
-          pdf.setFont("courier", "bold");
+          pdf.setFont("Courier", "bold");
           xPosition = 6;
-          yPosition += 0.2;
           break;
       }
 
-      // Split text to fit (approx 6 inches max width for action, shorter for others)
-      // Use logic from useScriptExport (maxWidth 6)
-      const splitText = pdf.splitTextToSize(content, 6);
       pdf.text(splitText, xPosition, yPosition);
-      yPosition += splitText.length * lineHeight + 0.1; // 0.1 spacing between elements
+      
+      // Advance yPosition by the height of the text printed
+      yPosition += splitText.length * lineHeight;
     });
-
-    // Add page numbers if requested
-    if (options.pageNumbers) {
-      const totalPages = pdf.getNumberOfPages();
-      for (let i = 1; i <= totalPages; i++) {
-        pdf.setPage(i);
-        pdf.setFontSize(10);
-        pdf.setFont("courier", "normal");
-        pdf.text(`${i}.`, 7.5, 0.5); // Right top corner usually for scripts, or bottom
-      }
-    }
 
     const blob = pdf.output('blob');
     const filename = `${title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf`;

@@ -541,7 +541,7 @@ export const useLocalElementState = (
       localElementsCount: localElements.length,
       lastSyncAgo: Date.now() - lastSyncTimestamp,
       isUsingLocal: useLocalElements,
-      backupAvailable: !!localStorage.getItem(`scriptBackup_${scriptId}`)
+      backupAvailable: localElements.length > 0 // We use memory/IndexedDB now
     };
   }, [localElements.length, lastSyncTimestamp, useLocalElements, scriptId]);
 

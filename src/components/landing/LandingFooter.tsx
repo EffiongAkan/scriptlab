@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Link } from "react-router-dom";
-import { Twitter, Instagram, Mail } from "lucide-react";
+import { Twitter, Instagram, Mail, Youtube } from "lucide-react";
 
 export const LandingFooter: React.FC = () => {
     return (
@@ -10,18 +10,16 @@ export const LandingFooter: React.FC = () => {
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-12 mb-16">
                     {/* Brand Column */}
                     <div className="col-span-2">
-                        <Link to="/" className="flex items-center gap-2 mb-6 group">
-                            <div className="bg-white p-1 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
-                                <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-6 w-auto min-w-[24px]" />
-                            </div>
-                            <span className="text-white font-bold text-xl tracking-tight">ScriptLab</span>
+                        <Link to="/" className="flex items-center gap-3 mb-6 group">
+                            <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-8 w-auto min-w-[32px] transition-all duration-300 group-hover:scale-110" />
+                            <span className="text-white font-extrabold text-2xl tracking-tighter transition-colors group-hover:text-naija-gold">Scriptyn</span>
                         </Link>
                         <p className="text-gray-500 text-sm max-w-xs leading-relaxed mb-8">
-                            The AI-powered screenwriting studio built for filmmakers, writers, and creators worldwide. Rooted in African storytelling, reaching the global screen.
+                            The AI-powered screenwriting studio built for filmmakers, writers, and creators worldwide.
                         </p>
                         <div className="flex gap-4">
                             <a
-                                href="https://x.com/script_lap"
+                                href="https://x.com/Scriptyn_script"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 aria-label="X (Twitter)"
@@ -30,7 +28,7 @@ export const LandingFooter: React.FC = () => {
                                 <Twitter className="h-5 w-5" />
                             </a>
                             <a
-                                href="https://instagram.com/scriptlap"
+                                href="https://instagram.com/scriptyn_app"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 aria-label="Instagram"
@@ -39,7 +37,7 @@ export const LandingFooter: React.FC = () => {
                                 <Instagram className="h-5 w-5" />
                             </a>
                             <a
-                                href="https://tiktok.com/@scriptlap"
+                                href="https://tiktok.com/@scriptyn"
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 aria-label="TikTok"
@@ -50,7 +48,16 @@ export const LandingFooter: React.FC = () => {
                                 </svg>
                             </a>
                             <a
-                                href="mailto:info@scriptlap.net"
+                                href="https://youtube.com/@scriptyn"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                aria-label="YouTube"
+                                className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-naija-green/20 hover:text-naija-green transition-all"
+                            >
+                                <Youtube className="h-5 w-5" />
+                            </a>
+                            <a
+                                href="mailto:support@scriptyn.com"
                                 aria-label="Email"
                                 className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-naija-green/20 hover:text-naija-green transition-all"
                             >
@@ -91,10 +98,15 @@ export const LandingFooter: React.FC = () => {
                     <div>
                         <h4 className="text-white font-bold mb-6">Company</h4>
                         <ul className="space-y-4">
-                            {["About", "Contact", "Privacy", "Terms"].map((item) => (
-                                <li key={item}>
-                                    <Link to="#" className="text-gray-500 hover:text-naija-gold text-sm transition-colors">
-                                        {item}
+                            {[
+                                { name: "About", path: "#" },
+                                { name: "Contact", path: "#" },
+                                { name: "Privacy", path: "/privacy-policy" },
+                                { name: "Terms", path: "/terms-of-use" }
+                            ].map((item) => (
+                                <li key={item.name}>
+                                    <Link to={item.path} className="text-gray-500 hover:text-naija-gold text-sm transition-colors">
+                                        {item.name}
                                     </Link>
                                 </li>
                             ))}
@@ -103,10 +115,10 @@ export const LandingFooter: React.FC = () => {
                 </div>
 
                 <div className="pt-8 border-t border-white/5 flex flex-col md:flex-row justify-between items-center gap-4 text-gray-600 text-xs">
-                    <p>© {new Date().getFullYear()} ScriptLab Studio. All rights reserved.</p>
+                    <p>© {new Date().getFullYear()} Scriptyn Studio. All rights reserved.</p>
                     <div className="flex gap-8">
-                        <Link to="#" className="hover:text-gray-400">Cookie Policy</Link>
-                        <Link to="#" className="hover:text-gray-400">Legal Notice</Link>
+                        <Link to="/privacy-policy" className="hover:text-gray-400">Privacy Policy</Link>
+                        <Link to="/terms-of-use" className="hover:text-gray-400">Terms of Use</Link>
                     </div>
                 </div>
             </div>

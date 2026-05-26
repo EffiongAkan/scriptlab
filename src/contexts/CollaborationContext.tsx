@@ -17,6 +17,7 @@ type CollaborationContextType = {
   updateCursorPosition: (elementId: string, position: number) => void;
   /** Broadcast that the current user is typing in the given element (auto-clears after 3s) */
   broadcastEditActivity: (elementId: string) => void;
+  localSessionId: string;
 };
 
 const CollaborationContext = createContext<CollaborationContextType | undefined>(undefined);
@@ -92,6 +93,7 @@ export function CollaborationProvider({
     collaborators: liveCollaborators,
     updateCursorPosition,
     broadcastEditActivity,
+    localSessionId,
   } = useCollaboratorPresence(
     scriptId,
     collaborators
@@ -118,6 +120,7 @@ export function CollaborationProvider({
     rejectInvitation,
     updateCursorPosition,
     broadcastEditActivity,
+    localSessionId,
   };
 
   return (

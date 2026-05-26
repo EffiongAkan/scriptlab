@@ -1,6 +1,6 @@
 
 import React from "react";
-import { Brain, FileText, Globe, Check } from "lucide-react";
+import { Brain, FileText, Globe, Check, BarChart, Youtube, Users } from "lucide-react";
 
 const features = [
     {
@@ -24,6 +24,27 @@ const features = [
         description: "Tools designed for culturally rich storytelling with local context awareness.",
         items: ["Cultural tone adaptation", "Local dialogue when needed", "Universal storytelling logic"],
     },
+    {
+        title: "Deep Script Analysis",
+        icon: <BarChart className="h-6 w-6 text-purple-400" />,
+        image: "/landing/feature-analysis.png",
+        description: "Analyze emotional arcs, pacing, and cultural authenticity with AI precision.",
+        items: ["Character arc tracking", "Pacing & tension analysis", "Cultural feedback loop"],
+    },
+    {
+        title: "YouTube to Screenplay",
+        icon: <Youtube className="h-6 w-6 text-[#ff0000]" />,
+        image: "/landing/feature-youtube.png",
+        description: "Transform video content directly into structured, formatted screenplays in minutes.",
+        items: ["Video transcription", "Scene-by-scene breakdown", "Instant formatting"],
+    },
+    {
+        title: "Real-time Collaboration",
+        icon: <Users className="h-6 w-6 text-pink-400" />,
+        image: "/landing/feature-collab.png",
+        description: "Write together with your co-writers securely from anywhere in the world.",
+        items: ["Live cursor tracking", "Granular permissions", "Conflict resolution"],
+    },
 ];
 
 export const FeatureGrid: React.FC = () => {
@@ -45,7 +66,7 @@ export const FeatureGrid: React.FC = () => {
                         From <span className="text-naija-green">Idea</span> to <span className="text-white">Screen</span> in Minutes
                     </h2>
                     <p className="text-gray-400 max-w-2xl mx-auto animate-fade-in-up delay-100">
-                        ScriptLab combines cutting-edge AI with deep industry knowledge to give you a professional edge.
+                        Scriptyn combines cutting-edge AI with deep industry knowledge to give you a professional edge.
                     </p>
                 </div>
 

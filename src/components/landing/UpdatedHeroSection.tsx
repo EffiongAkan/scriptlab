@@ -14,7 +14,7 @@ export const UpdatedHeroSection: React.FC = () => {
         <div className="w-full md:w-1/2 text-center md:text-left z-10 px-0 md:px-4 animate-fade-in">
           <h1
             className="font-black text-4xl sm:text-5xl md:text-6xl leading-tight tracking-tight mb-6 text-gray-900 dark:text-white"
-            aria-label="Welcome to ScriptLab - Creative African script platform"
+            aria-label="Welcome to Scriptyn - Creative African script platform"
           >
             Unleash{" "}
             <span className="bg-gradient-to-r from-green-800 to-yellow-400 bg-clip-text text-transparent">

@@ -2,6 +2,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
+import { db } from '@/db/offline-db';
 
 export interface ScriptElementType {
   id: string;
@@ -36,53 +37,90 @@ export const useScriptContent = (scriptId: string) => {
 
     try {
       console.log('Loading script elements for:', scriptId);
+      
+      let isOffline = !window.navigator.onLine;
+      let script = null;
+      let allData: ScriptElementType[] = [];
 
-      // Load script data
-      const { data: script, error: scriptError } = await supabase
-        .from('scripts')
-        .select('*')
-        .eq('id', scriptId)
-        .maybeSingle();
+      if (!isOffline) {
+        // Try loading from Supabase first
+        const { data: remoteScript, error: scriptError } = await supabase
+          .from('scripts')
+          .select('*')
+          .eq('id', scriptId)
+          .maybeSingle();
 
-      if (scriptError) {
-        console.error('Error loading script data:', scriptError);
-        setLoadError(scriptError.message);
-        return;
+        if (scriptError) {
+          console.error('Error loading script data:', scriptError);
+          // If network error, try offline fallback
+          isOffline = true;
+        } else {
+          script = remoteScript;
+          
+          let page = 0;
+          const CHUNK_SIZE = 1000;
+          let hasMore = true;
+
+          while (hasMore) {
+            const { data, error } = await supabase
+              .from('script_elements')
+              .select('*')
+              .eq('script_id', scriptId)
+              .order('position', { ascending: true })
+              .range(page * CHUNK_SIZE, (page + 1) * CHUNK_SIZE - 1);
+
+            if (error) {
+              console.error('Error loading script elements:', error);
+              isOffline = true;
+              hasMore = false;
+              break;
+            }
+
+            if (data) {
+              allData = [...allData, ...data];
+              if (data.length < CHUNK_SIZE) {
+                hasMore = false;
+              } else {
+                page++;
+              }
+            } else {
+              hasMore = false;
+            }
+          }
+        }
+      }
+
+      // Fallback to offline DB if offline or Supabase fetch failed
+      if (isOffline) {
+        console.log('Falling back to local Dexie database for offline loading');
+        try {
+          const localScript = await db.scripts.get(scriptId);
+          if (localScript) {
+            script = localScript as unknown as ScriptData;
+          }
+          
+          const localElements = await db.script_elements
+            .where('script_id')
+            .equals(scriptId)
+            .sortBy('position');
+            
+          if (localElements && localElements.length > 0) {
+            allData = localElements as unknown as ScriptElementType[];
+            setLoadError(null); // Clear any previous error if we successfully loaded from cache
+          } else if (!script) {
+            // We have neither the script nor elements locally
+            setLoadError('Failed to load script content offline. No local copy found.');
+            return;
+          }
+        } catch (dexieError) {
+          console.error('Error reading from offline DB:', dexieError);
+          setLoadError('Failed to load script content both online and offline.');
+          return;
+        }
       }
 
       if (script) {
         setScriptData(script);
-      }
-
-      let allData: ScriptElementType[] = [];
-      let page = 0;
-      const CHUNK_SIZE = 1000;
-      let hasMore = true;
-
-      while (hasMore) {
-        const { data, error } = await supabase
-          .from('script_elements')
-          .select('*')
-          .eq('script_id', scriptId)
-          .order('position', { ascending: true })
-          .range(page * CHUNK_SIZE, (page + 1) * CHUNK_SIZE - 1);
-
-        if (error) {
-          console.error('Error loading script elements:', error);
-          setLoadError(error.message);
-          return;
-        }
-
-        if (data) {
-          allData = [...allData, ...data];
-          if (data.length < CHUNK_SIZE) {
-            hasMore = false;
-          } else {
-            page++;
-          }
-        } else {
-          hasMore = false;
-        }
       }
 
       console.log(`Loaded total ${allData.length} elements`);

@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Sparkles } from "lucide-react";
 
 export const LandingHeader: React.FC = () => {
     const [isScrolled, setIsScrolled] = useState(false);
@@ -25,18 +25,22 @@ export const LandingHeader: React.FC = () => {
 
     return (
         <header
-            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${isScrolled
-                ? "bg-black/80 backdrop-blur-md border-b border-white/10 py-3"
-                : "bg-transparent py-5"
+            className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 flex flex-col ${isScrolled
+                ? "bg-black/80 backdrop-blur-md border-b border-white/10"
+                : "bg-transparent"
                 }`}
         >
-            <div className="max-w-7xl mx-auto px-6 flex items-center justify-between">
+            <div className="bg-gradient-to-r from-naija-green to-emerald-700 text-white py-2 px-4 text-center text-sm md:text-base font-medium flex items-center justify-center gap-2 relative shadow-md">
+                <Sparkles className="h-4 w-4 animate-pulse text-naija-gold shrink-0" />
+                <span className="truncate">Launch Special: Get the <strong>Professional Plan</strong> for just <strong className="text-naija-gold">$15/month!</strong></span>
+                <Link to="/pricing" className="ml-1 md:ml-2 underline underline-offset-2 hover:text-naija-gold transition-colors whitespace-nowrap">Claim Offer</Link>
+            </div>
+            
+            <div className={`max-w-7xl mx-auto w-full px-6 flex items-center justify-between transition-all duration-300 ${isScrolled ? "py-3" : "py-5"}`}>
                 {/* Logo */}
-                <Link to="/" className="flex items-center gap-2 group">
-                    <div className="bg-white p-1 rounded-lg flex items-center justify-center transition-transform group-hover:scale-105">
-                        <img src="/brand/logo.png" alt="ScriptLab Logo" className="h-8 w-auto min-w-[32px]" />
-                    </div>
-                    <span className="text-white font-bold text-2xl tracking-tight">ScriptLab</span>
+                <Link to="/" className="flex items-center gap-3 group">
+                    <img src="/brand/logo.png" alt="Scriptyn Logo" className="h-11 w-auto min-w-[44px] transition-all duration-300 group-hover:scale-110 group-hover:drop-shadow-[0_0_10px_rgba(16,185,129,0.3)]" />
+                    <span className="text-white font-extrabold text-2xl md:text-3xl tracking-tighter transition-all group-hover:text-naija-gold">Scriptyn</span>
                 </Link>
 
                 {/* Desktop Nav */}

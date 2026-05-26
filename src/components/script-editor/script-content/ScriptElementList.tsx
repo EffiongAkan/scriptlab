@@ -497,15 +497,7 @@ export const ScriptElementList = ({
         );
       })}
 
-      {/* Render collaborator cursors with improved positioning */}
-      {collaboratorCursors.map((cursor) => cursor && (
-        <CollaboratorCursor
-          key={`cursor-${cursor.id}`}
-          username={cursor.username}
-          color={cursor.color}
-          position={cursor.position}
-        />
-      ))}
+      {/* LiveCursorSystem handles global cursor rendering now */}
 
       {/* Performance indicator in development */}
       {typeof process !== 'undefined' && process.env?.NODE_ENV === 'development' && (

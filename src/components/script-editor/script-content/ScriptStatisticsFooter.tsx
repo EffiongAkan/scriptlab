@@ -1,7 +1,7 @@
 
 import React, { useMemo } from "react";
 import { ScriptElementType } from "@/hooks/useScriptContent";
-import { FileText, Clock } from "lucide-react";
+import { Clock } from "lucide-react";
 
 interface ScriptStatisticsFooterProps {
   scriptElements: ScriptElementType[];
@@ -9,7 +9,6 @@ interface ScriptStatisticsFooterProps {
 
 export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFooterProps) => {
   const statistics = useMemo(() => {
-    // No elements, return empty stats
     if (!scriptElements || scriptElements.length === 0) {
       return {
         characters: 0,
@@ -20,61 +19,52 @@ export const ScriptStatisticsFooter = ({ scriptElements }: ScriptStatisticsFoote
       };
     }
 
-    // Count total characters
     const characters = scriptElements.reduce((total, element) => {
       return total + (element.content?.length || 0);
     }, 0);
 
-    // Count total words
     const words = scriptElements.reduce((total, element) => {
       const content = element.content || "";
-      // Count words by splitting on whitespace
       const wordCount = content.trim().split(/\s+/).filter(Boolean).length;
       return total + wordCount;
     }, 0);
 
-    // Count scenes (heading elements)
     const scenes = scriptElements.filter(element => element.type === 'heading').length;
-
-    // Count dialogue elements
     const dialogueCount = scriptElements.filter(element => element.type === 'dialogue').length;
 
-    // Estimate runtime (1 page = ~1 minute of screen time, and ~250 words per page)
     const estimatedPages = words / 250;
     const estimatedRuntime = Math.max(1, Math.round(estimatedPages));
 
     return { characters, words, scenes, dialogueCount, estimatedRuntime };
   }, [scriptElements]);
 
+  const statItems = [
+    { value: statistics.words.toLocaleString(), label: "WORDS" },
+    { value: statistics.characters.toLocaleString(), label: "CHARS" },
+    { value: statistics.scenes, label: "SCENES" },
+    { value: statistics.dialogueCount, label: "DIALOGUE" },
+  ];
+
   return (
-    <div className="md:fixed md:bottom-6 md:left-1/2 md:-translate-x-1/2 z-30 p-2 sm:p-3 px-4 sm:px-6 bg-[#1A1A1A] md:bg-gray-900/90 backdrop-blur-md rounded-none md:rounded-full text-gray-300 text-[10px] sm:text-sm flex items-center justify-between border-0 md:border md:border-white/10 shadow-none md:shadow-2xl w-full sm:w-auto max-w-none sm:max-w-none sm:min-w-[600px] transition-all duration-300 pb-safe">
-      <div className="flex items-center space-x-6">
-        <div className="flex items-center">
-          <FileText className="w-4 h-4 mr-2 text-naija-gold/80" />
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-white tracking-wide">{statistics.words}</span> words
-            <span className="text-gray-600 mx-1">|</span>
-            <span className="font-bold text-white tracking-wide">{statistics.characters}</span> chars
-          </span>
+    <div className="md:fixed md:bottom-5 md:left-1/2 md:-translate-x-1/2 z-30 bg-[#1A1A1A]/95 md:bg-gray-900/90 backdrop-blur-md rounded-none md:rounded-xl text-gray-300 flex items-stretch border-0 md:border md:border-white/10 shadow-none md:shadow-2xl w-full md:w-auto overflow-hidden transition-all duration-300">
+      {/* Stat columns */}
+      {statItems.map((item, idx) => (
+        <div
+          key={item.label}
+          className={`flex flex-col items-center justify-center px-5 py-2.5 min-w-[80px] ${idx < statItems.length - 1 ? "border-r border-white/10" : ""}`}
+        >
+          <span className="text-base font-bold text-white leading-none tracking-tight">{item.value}</span>
+          <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest mt-1">{item.label}</span>
         </div>
+      ))}
 
-        <div className="hidden lg:flex items-center">
-          <span className="text-gray-600 mr-4">|</span>
-          <span className="flex items-center gap-1">
-            <span className="font-bold text-white tracking-wide">{statistics.scenes}</span> scenes
-            <span className="text-gray-600 mx-1">|</span>
-            <span className="font-bold text-white tracking-wide">{statistics.dialogueCount}</span> dialogue
-          </span>
-        </div>
-      </div>
-
-      <div className="flex items-center ml-3 sm:ml-6 shrink-0">
-        <Clock className="w-3.5 h-3.5 mr-1.5 sm:mr-2 text-naija-gold/80" />
-        <div className="flex flex-col items-center sm:items-start sm:flex-row sm:gap-1">
-          <span className="text-[7px] sm:text-[11px] font-bold text-gray-500 uppercase sm:hidden leading-none mb-0.5">ERT</span>
-          <span className="hidden sm:inline text-xs">Est. runtime:</span>
-          <span className="font-bold text-white text-[10px] sm:text-sm leading-none">
-            {statistics.estimatedRuntime}<span className="text-[8px] sm:text-xs font-normal text-gray-400 ml-0.5">min</span>
+      {/* Est. Runtime with clock icon */}
+      <div className="flex items-center gap-2 px-5 py-2.5 border-l border-white/10 bg-white/5">
+        <Clock className="w-3.5 h-3.5 text-naija-gold/80 flex-shrink-0" />
+        <div className="flex flex-col items-start">
+          <span className="text-[9px] font-semibold text-gray-500 uppercase tracking-widest leading-none mb-0.5">Est. Runtime</span>
+          <span className="text-sm font-bold text-white leading-none">
+            {statistics.estimatedRuntime}<span className="text-[10px] font-normal text-gray-400 ml-0.5">min</span>
           </span>
         </div>
       </div>

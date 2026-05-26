@@ -151,6 +151,41 @@ serve(async (req) => {
         })
       }
 
+      // --- GRANT AI CREDITS based on tier and interval ---
+      const CREDIT_MAP: Record<string, { month: number; year: number }> = {
+        pro: { month: 700, year: 9500 },
+        enterprise: { month: 9999, year: 9999 }, // unlimited
+      }
+
+      const creditConfig = CREDIT_MAP[tierId]
+      if (creditConfig) {
+        const creditsToGrant = interval === 'year' ? creditConfig.year : creditConfig.month
+
+        // Fetch current credits
+        const { data: profile } = await supabaseAdmin
+          .from('profiles')
+          .select('ai_credits')
+          .eq('id', supabaseUserId)
+          .maybeSingle()
+
+        const currentCredits = profile?.ai_credits ?? 0
+        const newCredits = currentCredits + creditsToGrant
+
+        await supabaseAdmin.from('profiles').update({
+          ai_credits: newCredits
+        }).eq('id', supabaseUserId)
+
+        // Log credit transaction
+        await supabaseAdmin.from('credit_transactions').insert({
+          user_id: supabaseUserId,
+          amount: creditsToGrant,
+          action: 'subscription',
+          description: `Subscription activated: ${tierId} (${interval}) — ${creditsToGrant} credits`
+        })
+
+        console.log(`Granted ${creditsToGrant} AI credits to user: ${supabaseUserId} (${tierId}/${interval})`)
+      }
+
       console.log(`Successfully activated subscription for user: ${supabaseUserId}, tier: ${tierId}`)
     }
 

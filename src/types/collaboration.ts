@@ -1,7 +1,9 @@
 
 // Collaboration related types
 export type Collaborator = {
-  id: string;
+  id: string; // The user ID
+  presence_ref?: string; // The unique connection ID for this tab/device
+  session_id?: string; // Client-generated session ID
   email: string;
   username: string;
   full_name?: string;
@@ -57,6 +59,8 @@ export type ScriptInvitation = {
 // Types for the presence tracking system
 export type PresenceUserState = {
   user_id: string;
+  presence_ref: string;
+  session_id?: string;
   username: string;
   cursor?: {
     elementId: string;
@@ -68,6 +72,7 @@ export type PresenceUserState = {
 
 export interface PresenceStateEntry {
   presence_ref: string;
+  session_id?: string;
   user_id?: string;
   username?: string;
   cursor?: {

@@ -25,13 +25,14 @@ interface CreditPackage {
   credits: number;
   bonus?: number;
   popular?: boolean;
+  price?: number;
 }
 
 const creditPackages: CreditPackage[] = [
-  { id: 'small', name: 'Starter Pack', credits: 50 },
-  { id: 'medium', name: 'Creator Pack', credits: 150, bonus: 25, popular: true },
-  { id: 'large', name: 'Professional Pack', credits: 300, bonus: 75 },
-  { id: 'xl', name: 'Studio Pack', credits: 600, bonus: 200 },
+  { id: 'small', name: 'Starter Pack', credits: 50, price: 3 },
+  { id: 'medium', name: 'Creator Pack', credits: 150, bonus: 25, popular: true, price: 5 },
+  { id: 'large', name: 'Professional Pack', credits: 300, bonus: 75, price: 10 },
+  { id: 'xl', name: 'Studio Pack', credits: 600, bonus: 200, price: 20 },
 ];
 
 export const AICreditsManager: React.FC = () => {
@@ -148,7 +149,7 @@ export const AICreditsManager: React.FC = () => {
                   </div>
                   <div className="text-xs text-muted-foreground mb-2">credits</div>
                   <Badge variant="outline" className="text-xs font-normal">
-                    ${(pkg.credits * 0.10).toFixed(2)}
+                    ${pkg.price ? pkg.price.toFixed(2) : (pkg.credits * 0.10).toFixed(2)}
                   </Badge>
                 </CardHeader>
                 <CardContent className="pt-0 p-4">
@@ -227,8 +228,10 @@ export const AICreditsManager: React.FC = () => {
             <DialogTitle>Confirm Credit Purchase</DialogTitle>
             <DialogDescription>
               You are requesting <strong>{requestPkg ? requestPkg.credits + (requestPkg.bonus ?? 0) : 0} AI credits</strong>
-              {' '}for <strong>${requestPkg ? (requestPkg.credits * 0.10).toFixed(2) : '0.00'}</strong>.
-              You will be redirected to Paystack to complete your purchase securely.
+              {' '}for <strong>${requestPkg ? (requestPkg.price ? requestPkg.price.toFixed(2) : (requestPkg.credits * 0.10).toFixed(2)) : '0.00'}</strong>.
+              You will be redirected to our secure payment partner, Paystack, to complete your purchase securely.
+              {'\n\n'}
+              Please note: all plans are currently displayed in USD but charged in their NGN equivalent at checkout.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
