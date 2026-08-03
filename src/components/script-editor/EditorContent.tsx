@@ -80,7 +80,25 @@ export function EditorContent() {
   // Listen for custom event from ScriptToolbar to toggle AI Prompt Box
   useEffect(() => {
     const handleToggleAI = () => {
-      setAiInitialSelection(null); // Clear previous selection when manual toggle
+      const selection = window.getSelection()?.toString().trim();
+      if (selection && selection.length > 0) {
+        let elementId: string | undefined = undefined;
+        try {
+          const range = window.getSelection()?.getRangeAt(0);
+          let container = range?.commonAncestorContainer as HTMLElement | undefined;
+          if (container?.nodeType === 3) container = container.parentElement as HTMLElement;
+          const elementNode = container?.closest?.('[data-element-id]') || container?.closest?.('[id^="script-element-"]');
+          elementId = elementNode?.getAttribute('data-element-id') || undefined;
+          if (!elementId && elementNode?.id) {
+            elementId = elementNode.id.replace('script-element-', '');
+          }
+        } catch (e) {
+          // Ignore range errors
+        }
+        setAiInitialSelection({ text: selection, elementId });
+      } else {
+        setAiInitialSelection(null);
+      }
       setShowAIPromptBox(prev => !prev);
     };
 

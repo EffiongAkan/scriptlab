@@ -109,14 +109,23 @@ serve(async (req) => {
             })
           }
 
-          // Fetch users using service role
-          const { data: authUsers, error: usersError } = await supabaseClient.auth.admin.listUsers()
-          if (usersError) {
-            console.error('List users error:', usersError)
-            throw usersError
+          // Fetch ALL users using pagination (listUsers defaults to 50 per page)
+          let rawUsers: any[] = [];
+          let page = 1;
+          const perPage = 1000;
+          while (true) {
+            const { data: authUsers, error: usersError } = await supabaseClient.auth.admin.listUsers({ page, perPage });
+            if (usersError) {
+              console.error('List users error:', usersError);
+              throw usersError;
+            }
+            const batch = authUsers?.users || [];
+            rawUsers = rawUsers.concat(batch);
+            console.log(`Fetched page ${page}: ${batch.length} users (total so far: ${rawUsers.length})`);
+            if (batch.length < perPage) break; // Last page reached
+            page++;
           }
 
-          const rawUsers = authUsers?.users || []
           const userIds = rawUsers.map(u => u.id)
           console.log(`Processing ${rawUsers.length} users with IDs:`, userIds)
 
@@ -316,7 +325,17 @@ serve(async (req) => {
 
           // Get various system statistics
           const [usersCount, scriptsCount, subscriptionsCount, totalCredits] = await Promise.all([
-            supabaseClient.auth.admin.listUsers().then(({ data }) => data?.users?.length || 0),
+            (async () => {
+              let count = 0, pg = 1;
+              while (true) {
+                const { data } = await supabaseClient.auth.admin.listUsers({ page: pg, perPage: 1000 });
+                const batch = data?.users || [];
+                count += batch.length;
+                if (batch.length < 1000) break;
+                pg++;
+              }
+              return count;
+            })(),
             supabaseClient.from('scripts').select('id', { count: 'exact' }).then(({ count }) => count || 0),
             supabaseClient.from('subscribers').select('id', { count: 'exact' }).then(({ count }) => count || 0),
             supabaseClient.from('profiles').select('ai_credits').then(({ data }) =>
@@ -531,10 +550,17 @@ serve(async (req) => {
           const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
 
           const [recentUsers, aiUsage, scriptActivity] = await Promise.all([
-            supabaseClient.auth.admin.listUsers().then(({ data }) => {
-              const users = data?.users || []
-              return users.filter(u => u.last_sign_in_at && new Date(u.last_sign_in_at) > new Date(thirtyDaysAgo)).length
-            }),
+            (async () => {
+              let all: any[] = [], pg = 1;
+              while (true) {
+                const { data } = await supabaseClient.auth.admin.listUsers({ page: pg, perPage: 1000 });
+                const batch = data?.users || [];
+                all = all.concat(batch);
+                if (batch.length < 1000) break;
+                pg++;
+              }
+              return all.filter(u => u.last_sign_in_at && new Date(u.last_sign_in_at) > new Date(thirtyDaysAgo)).length;
+            })(),
             supabaseClient.from('ai_usage_logs').select('*').gte('used_at', thirtyDaysAgo),
             supabaseClient.from('scripts').select('id').gte('created_at', thirtyDaysAgo)
           ])

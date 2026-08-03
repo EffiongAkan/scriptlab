@@ -3,7 +3,6 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { SmartScriptInput } from './SmartScriptInput';
 import { ScriptElementType } from '@/hooks/useScriptContent';
 import { useScriptEditor } from '@/contexts/ScriptEditorContext';
-import { useLongPress } from '@/hooks/useLongPress';
 import { cn } from '@/lib/utils';
 
 interface SimpleScriptElementProps {
@@ -72,16 +71,6 @@ export const SimpleScriptElement = ({
     }
   }, [id, onEnterPress]);
 
-  // Long-press handler for mobile: opens the element action sheet
-  const longPressHandlers = useLongPress(
-    useCallback(() => {
-      if (onLongPress) {
-        onLongPress(id, type, localContent);
-      }
-    }, [id, type, localContent, onLongPress]),
-    { delay: 500 }
-  );
-
   const getElementStyle = () => {
     switch (type) {
       case 'heading':
@@ -127,7 +116,6 @@ export const SimpleScriptElement = ({
         dir="ltr"
         id={`script-element-${id}`}
         data-element-id={id}
-        {...longPressHandlers}
       >
         {sceneNumber && type === 'heading' && (
           <div className="absolute -left-4 sm:-left-12 top-1 w-8 sm:w-10 text-right pr-2 text-gray-500 font-bold select-none cursor-default">

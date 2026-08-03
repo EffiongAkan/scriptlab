@@ -686,7 +686,7 @@ export const ScriptContentContainer = ({
             </Button>
 
             {totalPages !== undefined && totalPages > 1 && (
-              <div className="fixed bottom-6 right-2 md:bottom-8 md:right-8 z-50 flex flex-col gap-2 scale-75 md:scale-100 origin-bottom-right opacity-50 hover:opacity-100 transition-opacity duration-300">
+              <div className="fixed bottom-56 right-6 md:bottom-8 md:right-8 z-50 flex flex-col gap-2 scale-75 md:scale-100 origin-bottom-right opacity-50 hover:opacity-100 transition-opacity duration-300">
                 <div className="flex items-center gap-2 px-2 py-1.5 md:px-3 md:py-2 bg-[#1f2937]/80 backdrop-blur-md rounded-full border border-gray-700 shadow-lg md:shadow-xl">
                   <button
                     onClick={handlePrevPage}

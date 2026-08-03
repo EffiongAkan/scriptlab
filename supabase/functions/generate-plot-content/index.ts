@@ -136,7 +136,19 @@ serve(async (req) => {
     const isScriptGeneration = promptType === 'dialogue' || (seedPlot && seedPlot.toLowerCase().includes("create a full professional screenplay"));
 
     if (isPlotMapGeneration) {
-      // ... (Keep existing plot map generation prompt)
+      systemPrompt += `\n\nCRITICAL JSON INSTRUCTION: You MUST respond with ONLY a valid JSON object. No explanations, no markdown, no code fences, no preamble. Your entire response must be parseable JSON.
+
+      The JSON object must have a single key "scenes" containing an array of EXACTLY ${scenesNumber || 15} scene objects.
+      EACH object MUST have these exact properties:
+      - "scene_number": (integer) Sequential number from 1 to ${scenesNumber || 15}
+      - "title": (string) A short, punchy title (e.g., "The Setup", "The Betrayal")
+      - "goal": (string) What the scene accomplishes for the plot
+      - "storyline": (string) A 2-3 sentence description of the scene's action
+      - "character_states": (object) Key-value pairs of character names and their emotional/physical state
+      - "causal_links": (array of integers) Scene numbers that must happen before this one
+
+      Example of the required json format:
+      {"scenes":[{"scene_number":1,"title":"The Hook","goal":"Establish conflict","storyline":"...","character_states":{"HERO":"determined"},"causal_links":[]}]}`;
     } else if (isScriptGeneration) {
       systemPrompt += ` You are a storytelling engine. You MUST start EVERY line with one of these tags:
 [SCENE]
@@ -169,7 +181,7 @@ At the end of your response, after the script content, add a [SUMMARY] tag and a
 SCENE LENGTH: Each scene should be substantial with rich dialogue, but action lines MUST be light and concise. DO NOT write heavy, bulky, or overly detailed action descriptions.
 
 CRITICAL FORMATTING RULES:
-    1. CHARACTER INTRODUCTIONS: The FIRST TIME a character physically appears in an action line, write their name in ALL CAPS followed by their age in brackets. Example: CHISOM (28) rushes through the door. On all subsequent appearances, write their name normally.
+    1. CHARACTER INTRODUCTIONS: The FIRST TIME a character physically appears anywhere in the ENTIRE script (across all episodes and batches), write their name in ALL CAPS only. Example: CHISOM rushes through the door. NEVER add age or description in brackets after their name — not on introduction, not ever. On all subsequent appearances in any episode, write their name normally (not ALL CAPS).
     2. SCENE HEADINGS: [SCENE] must ONLY contain INT. or EXT., followed by location and time. NEVER include scene numbers, episode titles, or words like "SCENE 1:". Example: [SCENE] EXT. COMPOUND - NIGHT
     3. PARENTHETICALS: [PAREN] must ALWAYS contain the actual parentheses characters '(' and ')'. NEVER omit them. Example: [PAREN] (laughing)
 
@@ -181,6 +193,12 @@ CRITICAL FORMATTING RULES:
     5. USE BRITISH/NIGERIAN ENGLISH ONLY — never use American words (hallway→corridor, café→eatery, apartment→flat, elevator→lift, sidewalk→pavement, coffee→tea, cell phone→mobile phone, trash→rubbish, gas→petrol, vacation→holiday, soccer→football).
     6. OPENING SCENE: The VERY FIRST SCENE must be explosive, intense and immediately gripping — conflict, confrontation, danger or shocking revelation. NEVER a quiet or mundane opening.
 
+    NO HYPHENS RULE — ABSOLUTE:
+    NEVER use hyphens or dashes (-, –, —) anywhere in the script. Not in action lines, not in dialogue, not in scene headings, not in transitions. This rule has NO exceptions.
+    - Instead of a dash to join words or thoughts, use a comma or rewrite the sentence.
+    - Instead of an em dash for a pause in speech, use "..." (ellipsis) or split into two sentences.
+    - Instead of a hyphen in compound words like "well-known", write them as one word or two words.
+
     CRITICAL: Never use markdown formatting. Use ONLY the [TAG] system above.`;
     }
 
@@ -189,8 +207,9 @@ CRITICAL FORMATTING RULES:
     // For plot mapping, override the user prompt to enforce JSON
     // CRITICAL: Put instructions at the TOP to ensure model attention
     const finalUserPrompt = isPlotMapGeneration
-      ? `INSTRUCTION: Respond ONLY with a valid JSON object. No conversational text.
-DATA TO PROCESS:
+      ? `OUTPUT FORMAT: You must respond with ONLY raw valid JSON. Do not include any text before or after the JSON. Do not use markdown code fences. Do not write any explanation. Start your response immediately with { and end with }.
+
+Generate a json plot map with exactly ${scenesNumber || 15} scenes for the following story:
 ${userPrompt}`
       : userPrompt;
 
@@ -268,8 +287,8 @@ ${userPrompt}`
           bodyData = {
             model: currentModel || "gpt-4o",
             messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-            temperature: 0.3, // Lower temperature for more reliable JSON
-            max_tokens: 4000,
+            temperature: 0.2,
+            max_tokens: isPlotMapGeneration ? 6000 : 32000,
             response_format: isPlotMapGeneration ? { type: "json_object" } : undefined
           };
           break;
@@ -280,10 +299,10 @@ ${userPrompt}`
           callHeaders["anthropic-version"] = "2023-06-01";
           bodyData = {
             model: currentModel || "claude-3-5-sonnet-20241022",
-            max_tokens: 4000,
+            max_tokens: isPlotMapGeneration ? 6000 : 32000,
             messages: [{ role: "user", content: user }],
             system: sys,
-            temperature: 0.3
+            temperature: 0.2
           };
           break;
         case 'xai':
@@ -293,8 +312,8 @@ ${userPrompt}`
           bodyData = {
             model: currentModel || "grok-beta",
             messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-            temperature: 0.3,
-            max_tokens: 4000
+            temperature: 0.2,
+            max_tokens: isPlotMapGeneration ? 6000 : 32000
           };
           break;
         case 'deepseek':
@@ -305,8 +324,8 @@ ${userPrompt}`
           bodyData = {
             model: currentModel || "deepseek-chat",
             messages: [{ role: "system", content: sys }, { role: "user", content: user }],
-            temperature: 0.3,
-            max_tokens: 4000,
+            temperature: 0.2,
+            max_tokens: isPlotMapGeneration ? 6000 : 32000,
             response_format: isPlotMapGeneration ? { type: "json_object" } : undefined
           };
           break;
@@ -330,6 +349,48 @@ ${userPrompt}`
     // Phase 1: Initial Generation
     let { content, debug_request } = await performAICall(systemPrompt, finalUserPrompt, activeProvider, activeModel);
     let debugData = debug_request;
+
+    // Phase 1b: For plot maps, validate JSON and retry if needed
+    if (isPlotMapGeneration) {
+      const isValidJson = (str: string): boolean => {
+        const cleaned = str.replace(/```json|```/gi, '').trim();
+        const start = Math.min(
+          cleaned.indexOf('[') === -1 ? Infinity : cleaned.indexOf('['),
+          cleaned.indexOf('{') === -1 ? Infinity : cleaned.indexOf('{')
+        );
+        if (start === Infinity) return false;
+        try {
+          JSON.parse(cleaned.substring(start));
+          return true;
+        } catch {
+          // Try up to last ] or }
+          const end = Math.max(cleaned.lastIndexOf(']'), cleaned.lastIndexOf('}'));
+          if (end > start) {
+            try { JSON.parse(cleaned.substring(start, end + 1)); return true; } catch { return false; }
+          }
+          return false;
+        }
+      };
+
+      if (!isValidJson(content)) {
+        console.warn('Plot map response is not valid JSON. Retrying with ultra-strict prompt...');
+        const retryPrompt = `You must output ONLY a JSON object with no other text whatsoever. Start with { and end with }. No markdown, no explanation.
+
+JSON structure required:
+{"scenes":[{"scene_number":1,"title":"Scene Title","goal":"Scene goal","storyline":"Scene description","character_states":{},"causal_links":[]}]}
+
+Generate exactly ${scenesNumber || 15} scenes for this story:
+${userPrompt.substring(0, 2000)}`;
+        const retryResult = await performAICall(
+          `You are a JSON generator. Output only valid JSON. Never output any text outside the JSON structure.`,
+          retryPrompt,
+          activeProvider,
+          activeModel
+        );
+        content = retryResult.content;
+        console.log('Retry plot map response length:', content?.length);
+      }
+    }
 
     // Phase 2: Hallucination-Aware Refinement (HAR)
     // Only apply to dialogue/script generation as it's the most sensitive to errors

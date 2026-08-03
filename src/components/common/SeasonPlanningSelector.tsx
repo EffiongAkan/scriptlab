@@ -198,7 +198,7 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
                     value={[episodeCount]}
                     onValueChange={(value) => setEpisodeCount(value[0])}
                     min={1}
-                    max={24}
+                    max={26}
                     step={1}
                     className="w-full"
                 />

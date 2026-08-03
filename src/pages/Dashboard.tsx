@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScriptCard } from "@/components/dashboard/ScriptCard";
-import { FileText, BookOpen, Users, Upload, Check, X } from "lucide-react";
+import { FileText, BookOpen, Users, Upload, Check, X, ArrowLeft } from "lucide-react";
 import { v4 as uuid } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -18,6 +18,7 @@ import { cacheUserScriptsOffline } from "@/services/offline-cache-service";
 import { ScriptCreationDialog } from "@/components/common/ScriptCreationDialog";
 import { ScriptUploadDialog } from "@/components/dashboard/ScriptUploadDialog";
 import { UserProfileCard } from "@/components/dashboard/UserProfileCard";
+import { SeriesFolderCard } from "@/components/dashboard/SeriesFolderCard";
 import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { useInvitationActions } from "@/hooks/useInvitationActions";
 
@@ -50,6 +51,7 @@ export default function Dashboard() {
   const [showScriptCreationDialog, setShowScriptCreationDialog] = useState(false);
   const [showUploadDialog, setShowUploadDialog] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 
   const { pendingInvitations, isLoading: isLoadingInvitations } = usePendingInvitations();
   const { acceptInvitation, rejectInvitation, isLoading: isInvokingAction } = useInvitationActions();
@@ -85,12 +87,13 @@ export default function Dashboard() {
           return;
         }
 
-        // Fetch user's scripts
+        // Fetch user's scripts and sort by updated_at then created_at
         const { data: scriptsData, error: scriptsError } = await supabase
           .from('scripts')
           .select('*')
           .eq('user_id', user.id)
-          .order('updated_at', { ascending: false });
+          .order('updated_at', { ascending: false })
+          .order('created_at', { ascending: false });
 
         if (scriptsError) {
           console.error('Error fetching scripts:', scriptsError);
@@ -338,6 +341,105 @@ export default function Dashboard() {
     ));
   };
 
+  const extractSeriesInfo = (title: string) => {
+    const match = title.match(/^(.*) - S(\d+)E(\d+)(?:: (.*))?$/);
+    if (match) {
+      return {
+        isSeries: true,
+        seriesName: match[1].trim(),
+        season: parseInt(match[2]),
+        episode: parseInt(match[3]),
+        episodeName: match[4]?.trim() || ''
+      };
+    }
+    return { isSeries: false };
+  };
+
+  const getGroupedScripts = (scriptsToGroup: DashboardScript[]) => {
+    const groups = new Map<string, DashboardScript[]>();
+    const standalone: DashboardScript[] = [];
+
+    scriptsToGroup.forEach(script => {
+      const info = extractSeriesInfo(script.title);
+      if (info.isSeries && info.seriesName) {
+        if (!groups.has(info.seriesName)) {
+          groups.set(info.seriesName, []);
+        }
+        groups.get(info.seriesName)!.push(script);
+      } else {
+        standalone.push(script);
+      }
+    });
+
+    // Sort episodes inside groups
+    groups.forEach((episodes) => {
+      episodes.sort((a, b) => {
+        const infoA = extractSeriesInfo(a.title);
+        const infoB = extractSeriesInfo(b.title);
+        return (infoA.episode || 0) - (infoB.episode || 0);
+      });
+    });
+
+    return { groups, standalone };
+  };
+
+  const renderGroupedCards = (scriptsToRender: DashboardScript[]) => {
+    if (selectedFolder) {
+      const { groups } = getGroupedScripts(scriptsToRender);
+      const folderEpisodes = groups.get(selectedFolder) || [];
+      return (
+        <div className="space-y-6 col-span-full">
+          <div className="flex items-center gap-4 border-b pb-4">
+            <Button variant="ghost" onClick={() => setSelectedFolder(null)}>
+              <ArrowLeft className="mr-2 h-4 w-4" />
+              Back to Dashboard
+            </Button>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">{selectedFolder}</h2>
+              <p className="text-sm text-muted-foreground">{folderEpisodes.length} Episodes</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {renderScriptCards(folderEpisodes)}
+          </div>
+        </div>
+      );
+    }
+
+    const { groups, standalone } = getGroupedScripts(scriptsToRender);
+    const renderItems: React.ReactNode[] = [];
+
+    // Add folders
+    Array.from(groups.entries()).forEach(([seriesName, episodes]) => {
+      renderItems.push(
+        <SeriesFolderCard
+          key={`folder-${seriesName}`}
+          seriesName={seriesName}
+          episodes={episodes}
+          onClick={() => setSelectedFolder(seriesName)}
+        />
+      );
+    });
+
+    // Add standalone scripts
+    renderItems.push(...standalone.map(script => (
+      <ScriptCard
+        key={script.id}
+        script={script}
+        onUpdate={() => setRefreshKey(prev => prev + 1)}
+      />
+    )));
+
+    // Sort render items by the most recently updated item inside them
+    renderItems.sort((a: any, b: any) => {
+      const dateA = new Date(a.props.script ? a.props.script.updated_at : a.props.episodes[0].updated_at).getTime();
+      const dateB = new Date(b.props.script ? b.props.script.updated_at : b.props.episodes[0].updated_at).getTime();
+      return dateB - dateA;
+    });
+
+    return <>{renderItems}</>;
+  };
+
   const renderLoadingSkeletons = () => {
     return [1, 2, 3].map(i => (
       <Card key={i} className="overflow-hidden transition-all duration-300">
@@ -442,7 +544,7 @@ export default function Dashboard() {
                   Create Professional Script
                 </Button>
               </div>
-            ) : renderScriptCards(scripts.slice(0, 6))}
+            ) : renderGroupedCards(scripts)}
           </div>
         </TabsContent>
 
@@ -461,7 +563,7 @@ export default function Dashboard() {
                   Create Professional Script
                 </Button>
               </div>
-            ) : renderScriptCards(scripts)}
+            ) : renderGroupedCards(scripts)}
           </div>
         </TabsContent>
 

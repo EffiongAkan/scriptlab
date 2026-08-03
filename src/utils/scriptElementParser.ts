@@ -48,27 +48,27 @@ export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
     let elementType: ScriptElement['type'] = 'action';
     let content = line;
 
-    // 0. TAG-BASED HANDOFF PROTOCOL (Preferred)
-    if (line.match(/^\[(SCENE|HEADING)\]/i)) {
+    // 0. TAG-BASED HANDOFF PROTOCOL (Preferred - Tolerant of markdown artifacts like **[SCENE]**)
+    if (line.match(/^\s*(?:\*\*|__)?\[(SCENE|HEADING)\](?:\*\*|__)?/i)) {
       elementType = 'heading';
-      content = formatSceneHeading(line.replace(/^\[(SCENE|HEADING)\]/i, ''));
-    } else if (line.match(/^\[(CHAR|CHARACTER)\]/i)) {
+      content = formatSceneHeading(line.replace(/^\s*(?:\*\*|__)?\[(SCENE|HEADING)\](?:\*\*|__)?/i, ''));
+    } else if (line.match(/^\s*(?:\*\*|__)?\[(CHAR|CHARACTER)\](?:\*\*|__)?/i)) {
       elementType = 'character';
-      content = formatCharacterName(line.replace(/^\[(CHAR|CHARACTER)\]/i, ''));
-    } else if (line.match(/^\[(DIALOGUE|DIALOG)\]/i)) {
+      content = formatCharacterName(line.replace(/^\s*(?:\*\*|__)?\[(CHAR|CHARACTER)\](?:\*\*|__)?/i, ''));
+    } else if (line.match(/^\s*(?:\*\*|__)?\[(DIALOGUE|DIALOG)\](?:\*\*|__)?/i)) {
       elementType = 'dialogue';
-      content = formatDialogue(line.replace(/^\[(DIALOGUE|DIALOG)\]/i, ''));
-    } else if (line.match(/^\[ACTION\]/i)) {
+      content = formatDialogue(line.replace(/^\s*(?:\*\*|__)?\[(DIALOGUE|DIALOG)\](?:\*\*|__)?/i, ''));
+    } else if (line.match(/^\s*(?:\*\*|__)?\[ACTION\](?:\*\*|__)?/i)) {
       elementType = 'action';
-      content = formatActionLine(line.replace(/^\[ACTION\]/i, ''));
-    } else if (line.match(/^\[(PAREN|PARENTHETICAL)\]/i)) {
+      content = formatActionLine(line.replace(/^\s*(?:\*\*|__)?\[ACTION\](?:\*\*|__)?/i, ''));
+    } else if (line.match(/^\s*(?:\*\*|__)?\[(PAREN|PARENTHETICAL)\](?:\*\*|__)?/i)) {
       elementType = 'parenthetical';
-      content = line.replace(/^\[(PAREN|PARENTHETICAL)\]/i, '').trim();
+      content = line.replace(/^\s*(?:\*\*|__)?\[(PAREN|PARENTHETICAL)\](?:\*\*|__)?/i, '').trim();
       if (content && !content.startsWith('(')) content = `(${content}`;
       if (content && !content.endsWith(')')) content = `${content})`;
-    } else if (line.match(/^\[(TRANS|TRANSITION)\]/i)) {
+    } else if (line.match(/^\s*(?:\*\*|__)?\[(TRANS|TRANSITION)\](?:\*\*|__)?/i)) {
       elementType = 'transition';
-      content = line.replace(/^\[(TRANS|TRANSITION)\]/i, '').toUpperCase().trim();
+      content = line.replace(/^\s*(?:\*\*|__)?\[(TRANS|TRANSITION)\](?:\*\*|__)?/i, '').toUpperCase().trim();
     }
 
     // 1. REGEX FALLBACK (for backward compatibility/legacy lines)
@@ -112,6 +112,29 @@ export const parseScriptElements = (scriptContent: string): ScriptElement[] => {
     else {
       elementType = 'action';
       content = formatActionLine(line);
+    }
+
+    if (elementType === 'dialogue') {
+      const parenMatch = content.match(/^\s*(\([^)]+\))\s*(.*)$/);
+      if (parenMatch) {
+        // Push the parenthetical first as its own distinct element
+        elements.push({
+          id: uuid(),
+          script_id: '',
+          type: 'parenthetical',
+          content: parenMatch[1].trim(),
+          position: position++
+        });
+        
+        // Update content to just the remaining dialogue text
+        content = parenMatch[2].trim();
+        
+        // If there's no dialogue text left, skip pushing an empty dialogue element
+        if (!content) {
+          hasBlankLineBefore = false;
+          continue;
+        }
+      }
     }
 
     elements.push({

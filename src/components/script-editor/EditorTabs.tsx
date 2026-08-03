@@ -48,7 +48,7 @@ export const EditorTabs = ({
   return (
     <Tabs defaultValue="write" onValueChange={onTabChange} className="w-full h-full flex flex-col">
       {/* Centered Tabs List - Allow horizontal scroll on smaller windows to prevent side-cutoff */}
-      <div className="w-full bg-[#111827]/50 border-b border-white/5 py-1 flex justify-center overflow-x-auto no-scrollbar">
+      <div className="w-full bg-[#111827]/50 border-b border-white/5 py-1 flex justify-start md:justify-center overflow-x-auto no-scrollbar px-2">
         <TabsList className="bg-transparent h-10 gap-2 sm:gap-4 md:gap-8 flex-nowrap">
           <TabsTrigger 
             value="write" 

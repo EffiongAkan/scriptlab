@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { Loader2, CheckCircle, ArrowRight, Sparkles, ArrowLeft } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
@@ -68,6 +69,7 @@ export default function PlotGenerator() {
   const [synopsisOptions, setSynopsisOptions] = useState<SynopsisOption[]>([]);
   const [selectedSynopsis, setSelectedSynopsis] = useState<SynopsisOption | null>(null);
   const [isGeneratingSynopses, setIsGeneratingSynopses] = useState(false);
+  const [customSynopsisInstruction, setCustomSynopsisInstruction] = useState("");
 
   // Plot settings
   const [plotSettings, setPlotSettings] = useState<PlotSettings>({
@@ -141,7 +143,7 @@ export default function PlotGenerator() {
       if (data.scriptType === ScriptType.SKIT) {
         setPlotSettings(prev => ({ ...prev, scenesNumber: 3 }));
       } else if (data.scriptType === ScriptType.TV_SERIES || data.scriptType === ScriptType.WEB_SERIES) {
-        setPlotSettings(prev => ({ ...prev, scenesNumber: 25 }));
+        setPlotSettings(prev => ({ ...prev, scenesNumber: 13 }));
       }
 
       // Check if coming from saved synopsis
@@ -214,8 +216,9 @@ export default function PlotGenerator() {
     scriptType?: ScriptType;
     filmIndustry?: FilmIndustry;
     episodicStructure?: string;
+    episodicStructure?: string;
     seasonPlan?: any;
-  }) => {
+  }, customInstruction?: string) => {
     if (isGeneratingSynopses) return;
     setIsGeneratingSynopses(true);
     setSynopsisOptions([]);
@@ -236,6 +239,7 @@ export default function PlotGenerator() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("No session");
 
+      const isSeries = data.scriptType === ScriptType.TV_SERIES || data.scriptType === ScriptType.WEB_SERIES;
       const isSkit = data.scriptType === ScriptType.SKIT;
       const skitConstraints = isSkit ? `
 CRITICAL SKIT CONSTRAINTS:
@@ -250,6 +254,8 @@ CRITICAL SKIT CONSTRAINTS:
         { tone: 'Witty', period: 'Modern Day', setting: 'Urban', pace: 'Fast', description: "Create a witty and clever story with sharp dialogue and unexpected turns" },
         { tone: 'Dramatic', period: 'Modern Day', setting: 'Local', pace: 'Moderate', description: "Create a dramatic and emotionally intense story with deep character development and complex themes" },
         { tone: 'Satirical', period: 'Contemporary', setting: 'Everyday Life', pace: 'Snappy', description: "Create a satirical story that uses humor, irony, or exaggeration to criticize or expose human folly" }
+      ] : isSeries ? [
+        { tone: 'Seasonal Flow', description: "Create a comprehensive seasonal plan mapping out the overarching narrative and providing brief synopses for every individual episode in the season." }
       ] : [
         { tone: "Dramatic", description: "Create a dramatic and emotionally intense story with deep character development and complex themes" },
         { tone: "Light-hearted", description: "Create a light-hearted and uplifting story with humor, optimism, and heartwarming moments" },
@@ -266,16 +272,16 @@ CRITICAL SKIT CONSTRAINTS:
       // Get season plan context if available
       const seasonPlanContext = data.seasonPlan ? `\n## SEASON PLAN CONTEXT\nSeason Theme: ${data.seasonPlan.seasonTheme}\nTotal Episodes: ${data.seasonPlan.episodeCount}\nOverall Season Flow:\n${data.seasonPlan.episodes.slice(0, 5).map((e: any) => `Episode ${e.episodeNumber}: ${e.title} - ${e.storyBeat}`).join('\n')}\n` : '';
 
-      for (const scenario of scenarios) {
-        const synopsisPrompt = `Create a comprehensive professional treatment for a ${scenario.tone.toLowerCase()} ${data.genre}${scriptTypeText} titled "${data.title}".
+      const promptStructure = isSeries ? `
+**OVERALL SEASON PLAN:**
+A comprehensive summary of the season's overarching narrative arc and central conflict.
 
-${industryContext ? `\n${industryContext}\n\nIMPORTANT: Adapt this story to the specified film industry style above. Incorporate appropriate:\n- Language patterns and dialogue styles\n- Cultural references and nuances\n- Story structure conventions\n- Character naming and development\n- Setting and atmosphere specific to this industry\n\n` : ''}${scriptTypeGuidance ? `${scriptTypeGuidance}\n\nIMPORTANT: Structure this treatment according to the script type guidance above. Consider:\n- The unique structural requirements of this format\n- Appropriate pacing and story arc for this type\n- Character development suited to this medium\n- Any format-specific storytelling conventions\n\n` : ''}${skitConstraints}${seasonPlanContext ? `${seasonPlanContext}\n\nIMPORTANT: Use the season plan above to ensure this episode or series treatment fits into the larger narrative arc specified.\n\n` : ''}Story concept: ${data.storyIdea}
+**EPISODE SYNOPSES:**
+Provide a brief, compelling 1-2 paragraph synopsis for EVERY episode in the season, showing the progression of the story.
 
-The treatment should be extensive and detailed, including:
-
-**LOGLINE:**
-A compelling one-sentence summary that captures the essence, stakes, and unique appeal of the story.
-
+**SEASONAL CHARACTER ARCS:**
+Briefly describe the season-long character arc for the protagonist and main supporting cast.
+` : `
 **FULL SYNOPSIS (6-8 detailed paragraphs):**
 - Opening situation: Establish the world, main character's ordinary life, and inciting incident
 - First act development: How the protagonist is drawn into the central conflict
@@ -285,6 +291,18 @@ A compelling one-sentence summary that captures the essence, stakes, and unique 
 - Climax and resolution: How conflicts are resolved and character arcs completed
 - Themes and deeper meaning: What the story says about the human condition
 - Cultural authenticity: Authentic cultural dynamics and realistic character motivations
+`;
+
+      for (const scenario of scenarios) {
+        const synopsisPrompt = `Create a comprehensive professional treatment for a ${scenario.tone.toLowerCase()} ${data.genre}${scriptTypeText} titled "${data.title}".
+
+${customInstruction ? `\n\nUSER's CUSTOM INSTRUCTION: ${customInstruction}\nMake sure to strictly incorporate the above instruction into this treatment.\n\n` : ''}${industryContext ? `\n${industryContext}\n\nIMPORTANT: Adapt this story to the specified film industry style above. Incorporate appropriate:\n- Language patterns and dialogue styles\n- Cultural references and nuances\n- Story structure conventions\n- Character naming and development\n- Setting and atmosphere specific to this industry\n\n` : ''}${scriptTypeGuidance ? `${scriptTypeGuidance}\n\nIMPORTANT: Structure this treatment according to the script type guidance above. Consider:\n- The unique structural requirements of this format\n- Appropriate pacing and story arc for this type\n- Character development suited to this medium\n- Any format-specific storytelling conventions\n\n` : ''}${skitConstraints}${seasonPlanContext ? `${seasonPlanContext}\n\nIMPORTANT: Use the season plan above to ensure this episode or series treatment fits into the larger narrative arc specified.\n\n` : ''}Story concept: ${data.storyIdea}
+
+The treatment should be extensive and detailed, including:
+
+**LOGLINE:**
+A compelling one-sentence summary that captures the essence, stakes, and unique appeal of the story.
+${promptStructure}
 
 **DETAILED CHARACTER PROFILES:**
 - PROTAGONIST: Full name (appropriate to the cultural context), age, occupation, detailed background, personality traits, internal conflicts, external goals, character arc from beginning to end
@@ -642,23 +660,20 @@ Make this treatment comprehensive, engaging, and suitable for ${scenario.descrip
   };
 
   const generateSceneBatch = async (
-    batchNumber: number,
+    startScene: number,
+    endScene: number,
     totalScenes: number,
     scriptId: string,
     episodeInfo?: { number: number; title: string; beat: string },
     previousBatchTail: string = "",
-    rollingContext: string = ""
+    rollingContext: string = "",
+    currentPlotMap: SceneMap[] = plotMap,
+    alreadyIntroduced: string[] = []
   ) => {
-    // Generate 20 scenes per batch for strong continuity
-    const scenesPerBatch = 20;
-    const startScene = batchNumber * scenesPerBatch + 1;
-    const endScene = Math.min((batchNumber + 1) * scenesPerBatch, totalScenes);
-
-    console.log(`=== Generating Batch ${batchNumber + 1} ===`);
-    console.log(`Scenes ${startScene}-${endScene} of ${totalScenes}`);
+    console.log(`=== Generating Batch (Scenes ${startScene}-${endScene} of ${totalScenes}) ===`);
 
     // Get current scenes from plot map for this batch
-    const batchScenePlans = plotMap.filter(s => s.scene_number >= startScene && s.scene_number <= endScene);
+    const batchScenePlans = currentPlotMap.filter(s => s.scene_number >= startScene && s.scene_number <= endScene);
 
     // Get film industry context if available
     const industryContext = initialData?.filmIndustry ? getIndustryAIPromptContext(initialData.filmIndustry) : '';
@@ -666,24 +681,47 @@ Make this treatment comprehensive, engaging, and suitable for ${scenario.descrip
 
     // Build the scene generation prompt
     const episodeText = episodeInfo ? ` (Episode ${episodeInfo.number}: ${episodeInfo.title})` : '';
+    
+    const isSeriesCheck = initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES;
+    const isNollywoodCheck = initialData?.filmIndustry === 'Nollywood';
+
+    const dialogueRule = isSeriesCheck 
+      ? `\n\nDIALOGUE RULE: Keep dialogues extremely concise, light, and straight to the point. Avoid heavy, draggy, or overly dramatic monologues. Characters must speak realistically with minimal words.` 
+      : '';
+
+    const nollywoodConstraints = isNollywoodCheck 
+      ? `\n\nNOLLYWOOD CASTING RULE: Never have more than 3 active speaking characters in any single scene.\n\nNOLLYWOOD LOCATION RULE: Keep the number of unique locations to an absolute minimum. Reuse the same 2-3 primary locations throughout the script whenever possible.` 
+      : '';
 
     // Format the batch plans for the prompt
     const plansContext = batchScenePlans.length > 0
       ? batchScenePlans.map(p => `SCENE ${p.scene_number} GOAL: ${p.goal}\nSCENE ${p.scene_number} STORYLINE: ${p.storyline}`).join('\n\n')
-      : `Full Treatment: ${selectedSynopsis?.content}`;
+      : episodeInfo
+        ? `[No structured scene plan available for this batch. Use the episode story beat to guide these scenes: ${episodeInfo.storyBeat || episodeInfo.beat || ''}]`
+        : `Full Treatment: ${selectedSynopsis?.content}`;
 
-    const scenePrompt = batchNumber === 0 ?
+    const episodeSpecificInstructions = episodeInfo 
+      ? `\n\n=== THIS IS EPISODE ${episodeInfo.number}: ${episodeInfo.title} ===\nYou are ONLY writing scenes for this episode. Do NOT write scenes from any other episode.\nEPISODE STORY BEAT: ${episodeInfo.storyBeat || episodeInfo.beat || ''}\nSTRICTLY FOLLOW the Scene Plans below. Every scene you write MUST correspond to one of the listed scene plans for this episode.`
+      : '';
+
+    const scenePrompt = startScene === 1 ?
       `Generate SCENES ${startScene} through ${endScene} (${endScene - startScene + 1} scenes total) using these structural tags: [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS].
 
-STRICT: Output ONLY the tagged script content. No labels, no preamble. Jump directly to the first [SCENE].
+MANDATORY SCENE COUNT: You MUST write EXACTLY ${endScene - startScene + 1} scenes in this response — no more, no less. Each scene MUST begin with a [SCENE] tag. Do NOT stop early. Do NOT combine multiple scenes into one.
 
-Title: "${initialData?.title}${episodeText}"
+STRICT: Output ONLY the tagged script content in plain text. DO NOT use markdown, asterisks, or bold text. No labels, no preamble. Jump directly to the first [SCENE].
 
-OPENING SCENE RULE: The first scene MUST be intense, explosive and immediately gripping — use conflict, danger, confrontation or shocking revelation. NEVER a quiet opening.
+Title: "${initialData?.title}${episodeText}"${episodeSpecificInstructions}
 
-CHARACTER RULE: The FIRST TIME a character physically appears in an action line, write their name in ALL CAPS followed by their age in brackets, e.g. ADAEZE (32). On subsequent appearances, write normally.
+OPENING SCENE RULE: The first scene MUST be a strong, engaging, action-packed and/or hilarious scene that hooks the audience immediately. NEVER a quiet opening.
 
-SCENE PLANS:
+CHARACTER RULE: Write a character's name in ALL CAPS ONLY the very first time they appear in the ENTIRE script. NEVER add age, description, or any text in brackets after a character's name — not ever, not even on introduction. On all subsequent appearances in ANY episode or scene, write their name normally (not ALL CAPS).${alreadyIntroduced.length > 0 ? `
+
+ALREADY INTRODUCED CHARACTERS (DO NOT re-introduce these with ALL CAPS or brackets — write their names normally every time): ${alreadyIntroduced.join(', ')}` : ''}${dialogueRule}${nollywoodConstraints}
+
+NO HYPHENS RULE — ABSOLUTE: NEVER use hyphens or dashes (-, –, —) anywhere. Use "..." for pauses, commas for breaks, and rewrite compound words without hyphens.
+
+SCENE PLANS (Adapt these to fit the episode beat if applicable):
 ${plansContext}
 
 At the end of your full response, include a [SUMMARY] tag followed by a 2-sentence summary of the key events across all scenes generated.
@@ -691,18 +729,27 @@ At the end of your full response, include a [SUMMARY] tag followed by a 2-senten
 
       `Generate SCENES ${startScene} through ${endScene} of ${totalScenes} (${endScene - startScene + 1} scenes).
 
+MANDATORY SCENE COUNT: You MUST write EXACTLY ${endScene - startScene + 1} scenes in this response — no more, no less. Each scene MUST begin with a [SCENE] tag. Do NOT stop early. Do NOT combine multiple scenes into one.
+
+STRICT: Output ONLY the tagged script content in plain text. DO NOT use markdown, asterisks, or bold text. Use ONLY [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS] tags. Do not explain anything.
+
+Title: "${initialData?.title}${episodeText}"${episodeSpecificInstructions}
+
 STORY SO FAR (Memory):
 ${rollingContext || "N/A"}
 
 Maintain continuity from exact previous scene tail:
 ${previousBatchTail || "N/A"}
 
-CHARACTER RULE: The FIRST TIME a character physically appears in an action line in this batch, write their name in ALL CAPS followed by their age in brackets, e.g. EMEKA (45). On subsequent appearances in the same batch, write normally.
+CHARACTER RULE: Write a character's name in ALL CAPS ONLY the very first time they appear in the ENTIRE script. NEVER add age, description, or any text in brackets after a character's name — not ever, not even on introduction. On all subsequent appearances in ANY episode or scene, write their name normally (not ALL CAPS).${alreadyIntroduced.length > 0 ? `
 
-SCENE PLANS:
+ALREADY INTRODUCED CHARACTERS (DO NOT re-introduce these with ALL CAPS or brackets — write their names normally every time): ${alreadyIntroduced.join(', ')}` : ''}${dialogueRule}${nollywoodConstraints}
+
+NO HYPHENS RULE — ABSOLUTE: NEVER use hyphens or dashes (-, –, —) anywhere. Use "..." for pauses, commas for breaks, and rewrite compound words without hyphens.
+
+SCENE PLANS (Adapt these to fit the episode beat if applicable):
 ${plansContext}
 
-STRICT: Use ONLY [SCENE], [ACTION], [CHAR], [DIALOGUE], [PAREN], [TRANS] tags. Do not explain anything.
 At the end of your response, include a [SUMMARY] tag followed by a 2-sentence summary of what happened across all scenes in this batch.`;
 
     const maxRetries = 3;
@@ -727,7 +774,9 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
 
         // Pass character context explicitly
         const characterSection = selectedSynopsis?.content.match(/\*\*DETAILED CHARACTER PROFILES:\*\*[\s\S]*?(?=\*\*SETTING|$)/i)?.[0] || "";
-        const contextInjection = `\n\nOfficial Characters:\n${characterSection}\n\nFull Plot Context:\n${selectedSynopsis?.content}`;
+        const contextInjection = episodeInfo 
+          ? `\n\nOfficial Characters:\n${characterSection}\n\n=== SERIES BIBLE — REFERENCE ONLY ===\nYou MUST use this to maintain continuity and understand character arcs. However, you are WRITING EPISODE ${episodeInfo.number} ONLY. Any scene that belongs to a different episode is STRICTLY FORBIDDEN.\n\nFULL SEASON STORYLINE:\n${selectedSynopsis?.content}\n=== END SERIES BIBLE ===`
+          : `\n\nOfficial Characters:\n${characterSection}\n\nFull Plot Context:\n${selectedSynopsis?.content}`;
 
         // Determine prompt body
         const body = {
@@ -748,7 +797,7 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
           body
         });
 
-        console.log(`Response received for batch ${batchNumber}:`, {
+        console.log(`Response received for scenes ${startScene}-${endScene}:`, {
           success: response?.success,
           hasError: !!error,
           error: error,
@@ -756,7 +805,7 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
         });
 
         if (error) {
-          console.error(`Edge function error for batch ${batchNumber}:`, error);
+          console.error(`Edge function error for scenes ${startScene}-${endScene}:`, error);
 
           // Log specific error details if available
           if (error instanceof Error) {
@@ -778,12 +827,12 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
         }
 
         if (!response) {
-          console.error(`No response received for batch ${batchNumber}`);
+          console.error(`No response received for scenes ${startScene}-${endScene}`);
           throw new Error('No response received from script generation service.');
         }
 
         if (!response.success) {
-          console.error(`Script generation failed for batch ${batchNumber} - Full Response:`, response);
+          console.error(`Script generation failed for scenes ${startScene}-${endScene} - Full Response:`, response);
 
           // Show specific error from the edge function
           const errorMessage = response.error || 'Script generation failed';
@@ -803,11 +852,11 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
         }
 
         if (!response.content) {
-          console.error(`No content in response for batch ${batchNumber}:`, response);
+          console.error(`No content in response for scenes ${startScene}-${endScene}:`, response);
           throw new Error('No content received from script generation');
         }
 
-        console.log(`Successfully generated batch ${batchNumber + 1}, content length: ${response.content.length}`);
+        console.log(`Successfully generated scenes ${startScene}-${endScene}, content length: ${response.content.length}`);
         return response.content;
 
       } catch (error) {
@@ -839,6 +888,9 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
   };
 
   const handleGenerateScript = async () => {
+    // Prevent double-clicks using synchronous ref check
+    if (isGeneratingRef.current || isGeneratingScript) return;
+    
     if (!selectedSynopsis || !plotSettings.period || !plotSettings.setting || !plotSettings.pace) {
       toast({
         title: "Missing Information",
@@ -859,6 +911,8 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
       return;
     }
 
+    // Lock immediately
+    isGeneratingRef.current = true;
     setIsGeneratingScript(true);
     setCurrentStep('generating');
 
@@ -876,6 +930,7 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
         description: creditResult.message || `You need ${creditsNeeded} credits to generate this script.`,
         variant: "destructive"
       });
+      isGeneratingRef.current = false;
       setIsGeneratingScript(false);
       setCurrentStep('settings');
       return;
@@ -890,7 +945,16 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
 
       // Use existing episodes if available and valid
       if (episodes && episodes.length > 0) {
-        episodesToGenerate = episodes;
+        // Enforce uniqueness by episodeNumber to prevent duplicate generations
+        const uniqueEpisodes: any[] = [];
+        const seen = new Set();
+        for (const ep of episodes) {
+            if (!seen.has(ep.episodeNumber)) {
+                seen.add(ep.episodeNumber);
+                uniqueEpisodes.push(ep);
+            }
+        }
+        episodesToGenerate = uniqueEpisodes;
       }
       // Otherwise, generate stubs based on episodeCount
       else if (episodeCount && episodeCount > 0) {
@@ -913,6 +977,9 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
     setIsMultiEpisode(isSeries && episodesToGenerate.length > 1);
 
     try {
+      // Track characters introduced across ALL episodes so they are never re-introduced
+      const introducedCharactersAcrossScript = new Set<string>();
+
       for (let i = 0; i < episodesToGenerate.length; i++) {
         const currentEpisode = episodesToGenerate[i];
         setCurrentEpisodeIndex(i + 1);
@@ -925,6 +992,69 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
         const episodeTitleSuffix = isSeries ? ` - S01E${currentEpisode.episodeNumber}${currentEpisode.title ? `: ${currentEpisode.title}` : ''}` : '';
         const scriptTitle = `${initialData?.title || "Untitled Script"}${episodeTitleSuffix}`;
 
+        // Generate Episode-Specific Plot Map for TV Series
+        // CRITICAL: Never fall back to the global plotMap for series — it covers the whole season
+        let episodePlotMap: any[] = [];
+        if (isSeries) {
+          console.log(`Generating unique Plot Map for Episode ${currentEpisode.episodeNumber}: "${currentEpisode.title}"...`);
+          try {
+            const { data: pmResponse } = await supabase.functions.invoke('generate-plot-content', {
+              body: {
+                promptType: 'plot_map',
+                genre: initialData?.genre,
+                seedPlot: `CRITICAL INSTRUCTION: You are generating a ${plotSettings.scenesNumber || 15}-scene plot map for EPISODE ${currentEpisode.episodeNumber} titled "${currentEpisode.title}" ONLY.\n\nEPISODE ${currentEpisode.episodeNumber} STORY BEAT:\n${currentEpisode.storyBeat}\n\n=== SERIES BIBLE (FOR CONTINUITY CONTEXT ONLY — DO NOT WRITE SCENES FROM OTHER EPISODES) ===\n${selectedSynopsis?.content}\n\nGenerate EXACTLY ${plotSettings.scenesNumber || 15} scenes strictly for Episode ${currentEpisode.episodeNumber}.`,
+                scenesNumber: plotSettings.scenesNumber || 15,
+                tone: plotSettings.tone,
+                language: plotSettings.language,
+                bypassCache: true
+              }
+            });
+
+            if (pmResponse?.success && pmResponse?.content) {
+              // Robust parsing — same logic as generatePlotMap()
+              let jsonStr = pmResponse.content.replace(/```json|```/gi, '').trim();
+              const arrayStart = jsonStr.indexOf('[');
+              const objStart = jsonStr.indexOf('{');
+              let startIdx = -1;
+              if (arrayStart !== -1 && objStart !== -1) startIdx = Math.min(arrayStart, objStart);
+              else if (arrayStart !== -1) startIdx = arrayStart;
+              else if (objStart !== -1) startIdx = objStart;
+              if (startIdx !== -1) {
+                const arrayEnd = jsonStr.lastIndexOf(']');
+                const objEnd = jsonStr.lastIndexOf('}');
+                const endIdx = Math.max(arrayEnd, objEnd);
+                if (endIdx > startIdx) jsonStr = jsonStr.substring(startIdx, endIdx + 1);
+              }
+              try {
+                const parsedData = JSON.parse(jsonStr);
+                let discovered: any[] | null = null;
+                if (Array.isArray(parsedData)) discovered = parsedData;
+                else if (parsedData && typeof parsedData === 'object') {
+                  for (const key of ['scenes', 'plot', 'scene_list']) {
+                    if (Array.isArray(parsedData[key])) { discovered = parsedData[key]; break; }
+                  }
+                  if (!discovered) {
+                    for (const key of Object.keys(parsedData)) {
+                      if (Array.isArray(parsedData[key])) { discovered = parsedData[key]; break; }
+                    }
+                  }
+                }
+                if (discovered && discovered.length > 0) {
+                  episodePlotMap = discovered;
+                  console.log(`Episode ${currentEpisode.episodeNumber} plot map: ${episodePlotMap.length} scenes`);
+                }
+              } catch (parseErr) {
+                console.warn('Episode plot map JSON parse failed', parseErr);
+              }
+            }
+          } catch (e) {
+            console.error('Failed to generate episode plot map', e);
+          }
+        } else {
+          // Single film — use the global plot map generated earlier
+          episodePlotMap = plotMap;
+        }
+
         const { error: scriptError } = await supabase.from('scripts').insert({
           id: newScriptId,
           title: scriptTitle,
@@ -933,34 +1063,62 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
           language: plotSettings.language,
           script_type: initialData?.scriptType,
           film_industry: initialData?.filmIndustry,
-          plot_map: plotMap // CRITICAL FIX: Save the plot map for continuity
+          plot_map: episodePlotMap // CRITICAL FIX: Save the specific episode plot map
         });
 
         if (scriptError) throw new Error(`Failed to create script: ${scriptError.message}`);
 
-        // Generate content — 20 scenes per batch for strong continuity
-        const scenesPerBatch = 20;
-        const localTotalBatches = Math.ceil(plotSettings.scenesNumber / scenesPerBatch);
-        setTotalBatches(localTotalBatches);
-
+        // Use the user's preferred scene count for the episode
+        const episodeTotalScenes = plotSettings.scenesNumber || 15;
+        
+        // Generate content — 40 scenes per request
+        const scenesPerBatch = 40;
+        
         // Initialize story state for coherence tracking
-
-
         const allScenes = ['FADE IN:\n\n'];
         let previousBatchTail = "";
         let rollingSummaries: string[] = [];
 
-        for (let batch = 0; batch < localTotalBatches; batch++) {
-          setCurrentBatch(batch + 1);
+        // Helper: extract character names introduced in a batch (ALL CAPS words in [ACTION] lines)
+        const extractIntroducedChars = (text: string): string[] => {
+          const names: string[] = [];
+          const lines = text.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('[ACTION]')) {
+              // Match ALL CAPS words (2+ letters) that may be followed by optional (digits)
+              const matches = line.matchAll(/\b([A-Z]{2,}(?:\s+[A-Z]{2,})*)\s*(?:\(\d+\))?/g);
+              for (const m of matches) {
+                const name = m[1].trim();
+                // Filter out common uppercase non-name words
+                const skip = new Set(['INT','EXT','FADE','CUT','SMASH','DISSOLVE','THE','AND','BUT','FROM','INTO','ONTO','OVER','WITH','THEN','WHEN','BACK']);
+                if (!skip.has(name) && name.length >= 2) names.push(name);
+              }
+            }
+          }
+          return [...new Set(names)];
+        };
 
-          // Generate scene
+        let currentSceneGenerated = 0;
+        let batchCounter = 0;
+
+        while (currentSceneGenerated < episodeTotalScenes) {
+          batchCounter++;
+          setCurrentBatch(batchCounter);
+          
+          const startScene = currentSceneGenerated + 1;
+          const endScene = Math.min(startScene + scenesPerBatch - 1, episodeTotalScenes);
+
+          // Generate scene, passing already-introduced characters to prevent re-introductions
           const combinedResponse = await generateSceneBatch(
-            batch,
-            plotSettings.scenesNumber,
+            startScene,
+            endScene,
+            episodeTotalScenes,
             newScriptId,
             isSeries ? currentEpisode : undefined,
             previousBatchTail,
-            rollingSummaries.join(' ')
+            rollingSummaries.join(' '),
+            episodePlotMap,
+            [...introducedCharactersAcrossScript]
           );
 
           // Extract content and summary
@@ -976,14 +1134,25 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
 
           allScenes.push(batchContent);
 
+          // Dynamically count how many scenes the AI ACTUALLY generated in this batch
+          const generatedScenesCount = (batchContent.match(/\[SCENE\]/g) || []).length;
+          // Fallback just in case AI didn't use [SCENE] tags, to prevent infinite loop
+          const actualGenerated = generatedScenesCount > 0 ? generatedScenesCount : (endScene - startScene + 1);
+          
+          currentSceneGenerated += actualGenerated;
+
+          // Track introduced characters so future batches/episodes don't re-introduce them
+          const newlyIntroduced = extractIntroducedChars(batchContent);
+          newlyIntroduced.forEach(name => introducedCharactersAcrossScript.add(name));
+
           // Extract the tail of the current batch for the next one (last ~800 characters)
           previousBatchTail = batchContent.length > 800
             ? batchContent.substring(batchContent.length - 800)
             : batchContent;
 
-          setGenerationProgress(((batch + 1) / localTotalBatches) * 100);
+          setGenerationProgress(Math.min((currentSceneGenerated / episodeTotalScenes) * 100, 100));
 
-          if (batch < localTotalBatches - 1) {
+          if (currentSceneGenerated < episodeTotalScenes) {
             await new Promise(resolve => setTimeout(resolve, 2000));
           }
         }
@@ -1053,6 +1222,7 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
       });
       setCurrentStep('settings');
     } finally {
+      isGeneratingRef.current = false;
       setIsGeneratingScript(false);
     }
   };
@@ -1192,6 +1362,34 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
                     </Card>
                   ))}
 
+                  {synopsisOptions.length > 0 && (
+                    <div className="mt-8 border-t pt-6">
+                      <Label htmlFor="custom-instruction" className="text-base font-semibold mb-2 block">
+                        Refine Plan with AI
+                      </Label>
+                      <p className="text-sm text-muted-foreground mb-4">
+                        Want to tweak this plan? Give the AI specific instructions (e.g. "Focus more on the romantic subplot" or "Make episode 3 more action-packed").
+                      </p>
+                      <div className="flex flex-col gap-3">
+                        <Textarea 
+                          id="custom-instruction"
+                          placeholder="Type your custom instructions here..."
+                          value={customSynopsisInstruction}
+                          onChange={(e) => setCustomSynopsisInstruction(e.target.value)}
+                          className="min-h-[100px]"
+                        />
+                        <Button 
+                          onClick={() => generateSynopsisOptions(initialData!, customSynopsisInstruction)}
+                          variant="secondary"
+                          className="self-end"
+                          disabled={!customSynopsisInstruction.trim() || isGeneratingSynopses}
+                        >
+                          Regenerate with Instructions
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   {selectedSynopsis && (
                     <div className="flex justify-end mt-6">
                       <Button onClick={handleContinueToSettings} className="bg-primary">
@@ -1303,47 +1501,52 @@ At the end of your response, include a [SUMMARY] tag followed by a 2-sentence su
                       </Select>
                     </div>
 
-                    {/* Hide scene count for Series as it's determined by the episode structure/AI */}
-                    {(!initialData?.scriptType || (initialData.scriptType !== ScriptType.TV_SERIES && initialData.scriptType !== ScriptType.WEB_SERIES)) && (
-                      <div>
-                        <Label>Number of Scenes (Range: 5-150)</Label>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setPlotSettings({ ...plotSettings, scenesNumber: Math.max(5, plotSettings.scenesNumber - 1) })}
-                            disabled={plotSettings.scenesNumber <= 5}
-                          >
-                            -
-                          </Button>
-                          <Input
-                            type="number"
-                            min="5"
-                            max="150"
-                            value={plotSettings.scenesNumber}
-                            onChange={(e) => {
-                              let value = parseInt(e.target.value) || 15;
-                              if (value > 150) value = 150;
-                              setPlotSettings({ ...plotSettings, scenesNumber: value });
-                            }}
-                            className="text-center"
-                          />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setPlotSettings({ ...plotSettings, scenesNumber: Math.min(150, plotSettings.scenesNumber + 1) })}
-                            disabled={plotSettings.scenesNumber >= 150}
-                          >
-                            +
-                          </Button>
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Range: 5-150 scenes • Current: {plotSettings.scenesNumber} scenes
-                        </p>
+                    <div>
+                      <Label>
+                        {(initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) 
+                          ? "Scenes Per Episode (Max: 24)" 
+                          : "Number of Scenes (Range: 5-150)"}
+                      </Label>
+                      <div className="flex items-center gap-2 mt-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => setPlotSettings({ ...plotSettings, scenesNumber: Math.max(5, plotSettings.scenesNumber - 1) })}
+                          disabled={plotSettings.scenesNumber <= 5}
+                        >
+                          -
+                        </Button>
+                        <Input
+                          type="number"
+                          min="5"
+                          max={(initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) ? 24 : 150}
+                          value={plotSettings.scenesNumber}
+                          onChange={(e) => {
+                            let value = parseInt(e.target.value) || 13;
+                            const maxVal = (initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) ? 24 : 150;
+                            if (value > maxVal) value = maxVal;
+                            setPlotSettings({ ...plotSettings, scenesNumber: value });
+                          }}
+                          className="text-center"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          onClick={() => {
+                            const maxVal = (initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) ? 24 : 150;
+                            setPlotSettings({ ...plotSettings, scenesNumber: Math.min(maxVal, plotSettings.scenesNumber + 1) });
+                          }}
+                          disabled={plotSettings.scenesNumber >= ((initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) ? 24 : 150)}
+                        >
+                          +
+                        </Button>
                       </div>
-                    )}
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Range: 5-{(initialData?.scriptType === ScriptType.TV_SERIES || initialData?.scriptType === ScriptType.WEB_SERIES) ? 24 : 150} scenes • Current: {plotSettings.scenesNumber} scenes
+                      </p>
+                    </div>
                   </div>
                   <div className="flex flex-col-reverse sm:flex-row gap-3 justify-between mt-6">
                     <Button variant="outline" className="w-full sm:w-auto h-auto py-2 whitespace-normal" onClick={() => setCurrentStep('synopsis')}>
