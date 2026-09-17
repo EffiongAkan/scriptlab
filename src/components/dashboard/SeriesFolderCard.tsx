@@ -1,8 +1,18 @@
-import React from "react";
+
+import React, { useState } from "react";
 import { Card, CardContent, CardFooter, CardHeader } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Folder, Film, ChevronRight } from "lucide-react";
+import { Folder, Film, ChevronRight, Download, FileText, BookOpen, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useSeriesExport } from "@/hooks/useSeriesExport";
 
 interface DashboardScript {
   id: string;
@@ -20,11 +30,27 @@ interface SeriesFolderCardProps {
 }
 
 export function SeriesFolderCard({ seriesName, episodes, onClick }: SeriesFolderCardProps) {
-  // Sort episodes by episode number roughly (or rely on passed sorting)
   const episodeCount = episodes.length;
   const lastUpdated = episodes.reduce((latest, current) => {
     return new Date(current.updated_at) > new Date(latest.updated_at) ? current : latest;
   }, episodes[0]);
+
+  const { exportAllAsPDF, exportIndividualPDFs } = useSeriesExport();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExportAll = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExporting(true);
+    await exportAllAsPDF(seriesName, episodes);
+    setIsExporting(false);
+  };
+
+  const handleExportIndividual = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsExporting(true);
+    await exportIndividualPDFs(seriesName, episodes);
+    setIsExporting(false);
+  };
 
   return (
     <Card 
@@ -39,8 +65,56 @@ export function SeriesFolderCard({ seriesName, episodes, onClick }: SeriesFolder
             <h3 className="font-bold text-lg line-clamp-2 text-foreground pr-2 group-hover:text-naija-green transition-colors">
               {seriesName}
             </h3>
-            <div className="flex-shrink-0 bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-colors">
-              <Folder className="h-5 w-5 text-primary" />
+            <div className="flex items-center gap-1">
+              {/* Export dropdown */}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 rounded-lg bg-primary/10 hover:bg-primary/20 transition-colors"
+                    onClick={(e) => e.stopPropagation()}
+                    disabled={isExporting}
+                    title="Export episodes"
+                  >
+                    {isExporting ? (
+                      <Loader2 className="h-4 w-4 text-primary animate-spin" />
+                    ) : (
+                      <Download className="h-4 w-4 text-primary" />
+                    )}
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
+                  <DropdownMenuLabel className="text-xs text-muted-foreground">
+                    Export {episodeCount} Episode{episodeCount !== 1 ? "s" : ""}
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="cursor-pointer gap-2"
+                    onClick={handleExportAll}
+                  >
+                    <BookOpen className="h-4 w-4 text-naija-green" />
+                    <div>
+                      <p className="font-medium text-sm">All Episodes — One PDF</p>
+                      <p className="text-xs text-muted-foreground">Single file with all episodes</p>
+                    </div>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="cursor-pointer gap-2"
+                    onClick={handleExportIndividual}
+                  >
+                    <FileText className="h-4 w-4 text-blue-500" />
+                    <div>
+                      <p className="font-medium text-sm">Individual Episode PDFs</p>
+                      <p className="text-xs text-muted-foreground">One PDF per episode</p>
+                    </div>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+
+              <div className="flex-shrink-0 bg-primary/10 p-2 rounded-lg group-hover:bg-primary/20 transition-colors">
+                <Folder className="h-5 w-5 text-primary" />
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 mt-2">
@@ -70,13 +144,50 @@ export function SeriesFolderCard({ seriesName, episodes, onClick }: SeriesFolder
             })}
           </span>
         </div>
-        <Button variant="ghost" size="sm" className="h-8 px-2 text-naija-green group-hover:bg-naija-green/10" onClick={(e) => {
-          e.stopPropagation();
-          onClick();
-        }}>
-          Open Folder
-          <ChevronRight className="ml-1 h-4 w-4" />
-        </Button>
+        <div className="flex items-center gap-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                className="h-8 px-2.5 text-xs gap-1.5 border-border hover:bg-accent text-foreground font-medium"
+                onClick={(e) => e.stopPropagation()}
+                disabled={isExporting}
+              >
+                {isExporting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                Export
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuLabel className="text-xs text-muted-foreground">
+                Export {episodeCount} Episode{episodeCount !== 1 ? "s" : ""}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleExportAll}>
+                <BookOpen className="h-4 w-4 text-naija-green" />
+                <div>
+                  <p className="font-medium text-sm">All Episodes — One PDF</p>
+                  <p className="text-xs text-muted-foreground">Single file with all episodes</p>
+                </div>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="cursor-pointer gap-2" onClick={handleExportIndividual}>
+                <FileText className="h-4 w-4 text-blue-500" />
+                <div>
+                  <p className="font-medium text-sm">Individual Episode PDFs</p>
+                  <p className="text-xs text-muted-foreground">One PDF per episode</p>
+                </div>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          <Button variant="ghost" size="sm" className="h-8 px-2 text-naija-green group-hover:bg-naija-green/10" onClick={(e) => {
+            e.stopPropagation();
+            onClick();
+          }}>
+            Open Folder
+            <ChevronRight className="ml-1 h-4 w-4" />
+          </Button>
+        </div>
       </CardFooter>
     </Card>
   );

@@ -8,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ChevronDown, ChevronUp, Sparkles, ListChecks } from "lucide-react";
+import { VoiceInputButton } from "@/components/common/VoiceInputButton";
 import { tvSeriesStructures } from "@/utils/scriptTypeGuidance";
 import { ScriptType, Genre } from "@/types";
 
@@ -39,19 +40,19 @@ const structureDefaults: Record<string, { episodeCount: number; suggestion: stri
         suggestion: "Each episode is standalone. Your season theme ties episodes together thematically rather than through a continuous plot."
     },
     SERIALIZED: {
-        episodeCount: 8,
+        episodeCount: 13,
         suggestion: "One continuous story told across all episodes. Each episode is a chapter in your larger narrative."
     },
     HYBRID: {
-        episodeCount: 10,
+        episodeCount: 13,
         suggestion: "Each episode has its own plot that resolves, while advancing a larger season arc."
     },
     ANTHOLOGY: {
-        episodeCount: 8,
+        episodeCount: 13,
         suggestion: "Each episode is a completely new story. The season theme provides thematic unity across independent narratives."
     },
     LIMITED_SERIES: {
-        episodeCount: 6,
+        episodeCount: 8,
         suggestion: "One complete story with a definitive beginning, middle, and end told across a fixed number of episodes."
     },
     SOAP: {
@@ -85,10 +86,11 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
     const [episodes, setEpisodes] = useState<EpisodeIdea[]>([]);
     const [expandedEpisode, setExpandedEpisode] = useState<number | null>(null);
 
-    // Initialize episodes when count changes
+    // Initialize episodes when count changes - ensure at least 13 slots exist for planning
     React.useEffect(() => {
         const newEpisodes: EpisodeIdea[] = [];
-        for (let i = 1; i <= episodeCount; i++) {
+        const totalSlotsToPrepare = Math.max(episodeCount, 13);
+        for (let i = 1; i <= totalSlotsToPrepare; i++) {
             const existing = episodes.find(e => e.episodeNumber === i);
             newEpisodes.push(existing || {
                 episodeNumber: i,
@@ -223,7 +225,14 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
 
             {/* Season Theme */}
             <div className="space-y-2">
-                <Label htmlFor="seasonTheme">Season Theme / Story Idea *</Label>
+                <div className="flex justify-between items-center">
+                    <Label htmlFor="seasonTheme">Season Theme / Story Idea *</Label>
+                    <VoiceInputButton
+                        onTranscript={(text) => {
+                            setSeasonTheme((prev) => (prev ? `${prev} ${text}` : text));
+                        }}
+                    />
+                </div>
                 <Textarea
                     id="seasonTheme"
                     value={seasonTheme}
@@ -265,7 +274,7 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
 
                 {planIndividualEpisodes && (
                     <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                        {episodes.slice(0, Math.min(episodeCount, 6)).map(episode => (
+                        {episodes.slice(0, 13).map(episode => (
                             <Card key={episode.episodeNumber} className="overflow-hidden">
                                 <CardHeader
                                     className="py-3 px-4 cursor-pointer hover:bg-muted/50 transition-colors"
@@ -314,10 +323,10 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
                                 )}
                             </Card>
                         ))}
-                        {episodeCount > 6 && (
+                        {episodeCount > 13 && (
                             <p className="text-xs text-center text-muted-foreground py-2">
                                 <ListChecks className="h-3 w-3 inline mr-1" />
-                                Showing first 6 episodes. {episodeCount - 6} more episodes will use the season theme.
+                                Showing first 13 episodes. {episodeCount - 13} more episodes will use the season theme.
                             </p>
                         )}
                     </div>

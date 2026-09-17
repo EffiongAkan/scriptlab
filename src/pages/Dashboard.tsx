@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScriptCard } from "@/components/dashboard/ScriptCard";
-import { FileText, BookOpen, Users, Upload, Check, X, ArrowLeft } from "lucide-react";
+import { FileText, BookOpen, Users, Upload, Check, X, ArrowLeft, Download, Loader2 } from "lucide-react";
 import { v4 as uuid } from "uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -21,6 +21,70 @@ import { UserProfileCard } from "@/components/dashboard/UserProfileCard";
 import { SeriesFolderCard } from "@/components/dashboard/SeriesFolderCard";
 import { usePendingInvitations } from "@/hooks/usePendingInvitations";
 import { useInvitationActions } from "@/hooks/useInvitationActions";
+import { useSeriesExport } from "@/hooks/useSeriesExport";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+
+// Inline export menu used in the open folder view header
+function FolderExportMenu({ seriesName, episodes }: { seriesName: string; episodes: { id: string; title: string }[] }) {
+  const { exportAllAsPDF, exportIndividualPDFs } = useSeriesExport();
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleAll = async () => {
+    setIsExporting(true);
+    await exportAllAsPDF(seriesName, episodes);
+    setIsExporting(false);
+  };
+
+  const handleIndividual = async () => {
+    setIsExporting(true);
+    await exportIndividualPDFs(seriesName, episodes);
+    setIsExporting(false);
+  };
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button size="sm" className="gap-2 bg-naija-green hover:bg-naija-green-dark text-white font-medium shadow-sm" disabled={isExporting}>
+          {isExporting ? (
+            <Loader2 className="h-4 w-4 animate-spin text-white" />
+          ) : (
+            <Download className="h-4 w-4 text-white" />
+          )}
+          Export Episodes
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60 bg-card border-border shadow-md">
+        <DropdownMenuLabel className="text-xs text-muted-foreground">
+          Export {episodes.length} Episode{episodes.length !== 1 ? "s" : ""}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className="cursor-pointer gap-2 focus:bg-accent focus:text-accent-foreground" onClick={handleAll}>
+          <BookOpen className="h-4 w-4 text-naija-green" />
+          <div>
+            <p className="font-medium text-sm">All Episodes — One PDF</p>
+            <p className="text-xs text-muted-foreground">Single file with all episodes</p>
+          </div>
+        </DropdownMenuItem>
+        <DropdownMenuItem className="cursor-pointer gap-2 focus:bg-accent focus:text-accent-foreground" onClick={handleIndividual}>
+          <FileText className="h-4 w-4 text-blue-500" />
+          <div>
+            <p className="font-medium text-sm">Individual Episode PDFs</p>
+            <p className="text-xs text-muted-foreground">One PDF per episode</p>
+          </div>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+
 
 // Define simplified Script type for Dashboard use
 interface DashboardScript {
@@ -389,14 +453,20 @@ export default function Dashboard() {
       const folderEpisodes = groups.get(selectedFolder) || [];
       return (
         <div className="space-y-6 col-span-full">
-          <div className="flex items-center gap-4 border-b pb-4">
-            <Button variant="ghost" onClick={() => setSelectedFolder(null)}>
-              <ArrowLeft className="mr-2 h-4 w-4" />
-              Back to Dashboard
-            </Button>
-            <div>
-              <h2 className="text-xl font-bold text-foreground">{selectedFolder}</h2>
-              <p className="text-sm text-muted-foreground">{folderEpisodes.length} Episodes</p>
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b pb-4">
+            <div className="flex flex-wrap items-center gap-4">
+              <Button variant="ghost" onClick={() => setSelectedFolder(null)}>
+                <ArrowLeft className="mr-2 h-4 w-4" />
+                Back to Dashboard
+              </Button>
+              <div className="h-6 w-px bg-border hidden sm:block" />
+              <div>
+                <h2 className="text-xl font-bold text-foreground">{selectedFolder}</h2>
+                <p className="text-sm text-muted-foreground">{folderEpisodes.length} Episodes</p>
+              </div>
+              <div className="ml-2">
+                <FolderExportMenu seriesName={selectedFolder} episodes={folderEpisodes} />
+              </div>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -405,6 +475,7 @@ export default function Dashboard() {
         </div>
       );
     }
+
 
     const { groups, standalone } = getGroupedScripts(scriptsToRender);
     const renderItems: React.ReactNode[] = [];
@@ -530,41 +601,50 @@ export default function Dashboard() {
         </TabsList>
 
         <TabsContent value="recent" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? renderLoadingSkeletons() : scripts.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <FileText className="h-8 w-8 text-gray-400" />
+          {selectedFolder ? (
+            renderGroupedCards(scripts)
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {isLoading ? renderLoadingSkeletons() : scripts.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <FileText className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-300 mb-2">No scripts yet</h3>
+                  <p className="text-sm text-gray-500 max-w-sm">
+                    Create your first professional script to start writing your screenplay
+                  </p>
+                  <Button onClick={handleCreateNewScript} className="mt-4 bg-naija-green hover:bg-naija-green-dark text-white">
+                    Create Professional Script
+                  </Button>
                 </div>
-                <h3 className="text-lg font-medium text-gray-300 mb-2">No scripts yet</h3>
-                <p className="text-sm text-gray-500 max-w-sm">
-                  Create your first professional script to start writing your screenplay
-                </p>
-                <Button onClick={handleCreateNewScript} className="mt-4 bg-naija-green hover:bg-naija-green-dark text-white">
-                  Create Professional Script
-                </Button>
-              </div>
-            ) : renderGroupedCards(scripts)}
-          </div>
+              ) : renderGroupedCards(scripts)}
+            </div>
+          )}
         </TabsContent>
 
+
         <TabsContent value="all" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {isLoading ? renderLoadingSkeletons() : scripts.length === 0 ? (
-              <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
-                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-                  <FileText className="h-8 w-8 text-gray-400" />
+          {selectedFolder ? (
+            renderGroupedCards(scripts)
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {isLoading ? renderLoadingSkeletons() : scripts.length === 0 ? (
+                <div className="col-span-full flex flex-col items-center justify-center py-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+                    <FileText className="h-8 w-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-300 mb-2">No scripts yet</h3>
+                  <p className="text-sm text-gray-500 max-w-sm">
+                    Create your first professional script to start writing your screenplay
+                  </p>
+                  <Button onClick={handleCreateNewScript} className="mt-4 bg-naija-green hover:bg-naija-green-dark text-white">
+                    Create Professional Script
+                  </Button>
                 </div>
-                <h3 className="text-lg font-medium text-gray-300 mb-2">No scripts yet</h3>
-                <p className="text-sm text-gray-500 max-w-sm">
-                  Create your first professional script to start writing your screenplay
-                </p>
-                <Button onClick={handleCreateNewScript} className="mt-4 bg-naija-green hover:bg-naija-green-dark text-white">
-                  Create Professional Script
-                </Button>
-              </div>
-            ) : renderGroupedCards(scripts)}
-          </div>
+              ) : renderGroupedCards(scripts)}
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="shared" className="mt-6 space-y-8">

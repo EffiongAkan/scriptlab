@@ -12,6 +12,7 @@ import { GenreSelector, SubGenreSelector } from "@/components/plot/GenreSelector
 import { LanguageSelector } from "@/components/plot/LanguageSelector";
 import { StoryBeatMap } from "@/components/plot/StoryBeatMap";
 import { PlotHoleDetector } from "@/components/plot/PlotHoleDetector";
+import { VoiceInputButton } from "@/components/common/VoiceInputButton";
 
 interface SidebarProps {
   activeTab: string;
@@ -92,7 +93,17 @@ export function PlotGeneratorSidebar({
           />
         </div>
         <div className="space-y-2">
-          <Label>Plot Seed (Optional)</Label>
+          <div className="flex justify-between items-center">
+            <Label>Plot Seed (Optional)</Label>
+            <VoiceInputButton
+              onTranscript={(text) =>
+                setGenerationPrompt({
+                  ...generationPrompt,
+                  seedPlot: generationPrompt.seedPlot ? `${generationPrompt.seedPlot} ${text}` : text
+                })
+              }
+            />
+          </div>
           <Textarea 
             placeholder="Brief description of your story idea..." 
             value={generationPrompt.seedPlot || ""} 

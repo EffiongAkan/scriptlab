@@ -90,12 +90,28 @@ export function ScriptCard({ script, onUpdate }: ScriptCardProps) {
   const handleDelete = async () => {
     setIsDeleting(true);
     try {
+      // First, manually delete dependent records that may not have CASCADE
+      await supabase.from('script_analyses').delete().eq('script_id', script.id);
+      await supabase.from('script_versions').delete().eq('script_id', script.id);
+      await supabase.from('cache_warming_jobs').delete().eq('script_id', script.id);
+      await supabase.from('ai_cache').delete().eq('script_id', script.id);
+      await supabase.from('script_elements').delete().eq('script_id', script.id);
+      await supabase.from('characters').delete().eq('script_id', script.id);
+      await supabase.from('script_collaborators').delete().eq('script_id', script.id);
+      await supabase.from('script_invitations').delete().eq('script_id', script.id);
+      await supabase.from('shared_scripts').delete().eq('script_id', script.id);
+      await supabase.from('script_comments').delete().eq('script_id', script.id);
+
+      // Now delete the script itself
       const { error } = await supabase
         .from('scripts')
         .delete()
         .eq('id', script.id);
 
-      if (error) throw error;
+      if (error) {
+        console.error("Delete script error:", JSON.stringify(error));
+        throw error;
+      }
 
       toast({
         title: "Script Deleted",
@@ -103,11 +119,11 @@ export function ScriptCard({ script, onUpdate }: ScriptCardProps) {
       });
 
       onUpdate?.();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Delete failed:", error);
       toast({
         title: "Delete Failed",
-        description: "Could not delete the script. Please try again.",
+        description: error?.message || "Could not delete the script. Please try again.",
         variant: "destructive"
       });
     } finally {

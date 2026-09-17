@@ -17,6 +17,7 @@ import { ScriptTypeIndustrySelector } from "@/components/common/ScriptTypeIndust
 import { VideoAnalysisDialog } from "@/components/common/VideoAnalysisDialog";
 import { EpisodicStructureSelector } from "@/components/common/EpisodicStructureSelector";
 import { SeasonPlanningSelector, SeasonPlan } from "@/components/common/SeasonPlanningSelector";
+import { VoiceInputButton } from "@/components/common/VoiceInputButton";
 import { supportsEpisodicStructure } from "@/utils/scriptTypeGuidance";
 import { z } from "zod";
 
@@ -496,7 +497,15 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
               </div>
 
               <div>
-                <Label htmlFor="storyIdea">Story Idea</Label>
+                <div className="flex justify-between items-center mb-1.5">
+                  <Label htmlFor="storyIdea">Story Idea</Label>
+                  <VoiceInputButton
+                    onTranscript={(text) => {
+                      setStoryIdea((prev) => (prev ? `${prev} ${text}` : text));
+                      setValidationErrors((prev) => ({ ...prev, idea: undefined }));
+                    }}
+                  />
+                </div>
                 <Textarea
                   id="storyIdea"
                   value={storyIdea}
