@@ -18,8 +18,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   const [isSupported, setIsSupported] = useState(true);
   const recognitionRef = useRef<any>(null);
   const onTranscriptRef = useRef(onTranscript);
-  const shouldListenRef = useRef(false);
-  const processedIndicesRef = useRef<Set<number>>(new Set());
+  const lastTranscriptRef = useRef<string>('');
   const { toast } = useToast();
 
   // Always keep latest callback reference without re-triggering effect
@@ -37,64 +36,46 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     }
 
     const recognition = new SpeechRecognition();
-    recognition.continuous = true;
+    // Do not force continuous restart loops on mobile as it causes OS mic beeping and permission toggling
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
-      let newTranscript = '';
-
+      let currentTranscript = '';
       for (let i = 0; i < event.results.length; i++) {
-        const result = event.results[i];
-        if (result && result.isFinal && !processedIndicesRef.current.has(i)) {
-          processedIndicesRef.current.add(i);
-          const text = result[0]?.transcript?.trim();
-          if (text) {
-            newTranscript += (newTranscript ? ' ' : '') + text;
-          }
+        const transcriptPart = event.results[i][0]?.transcript;
+        if (transcriptPart) {
+          currentTranscript += transcriptPart;
         }
       }
 
-      if (newTranscript) {
-        onTranscriptRef.current(newTranscript);
+      const trimmed = currentTranscript.trim();
+      if (trimmed && trimmed !== lastTranscriptRef.current) {
+        lastTranscriptRef.current = trimmed;
+        onTranscriptRef.current(trimmed);
       }
     };
 
     recognition.onerror = (event: any) => {
       console.error('Speech recognition error:', event.error);
-      if (event.error === 'no-speech') {
-        // Automatically keep listening if no speech was detected in a brief silence
-        return;
-      }
-      shouldListenRef.current = false;
       setIsListening(false);
-      if (event.error !== 'aborted') {
+      if (event.error !== 'no-speech' && event.error !== 'aborted') {
         toast({
-          title: 'Voice Input Warning',
-          description: `Voice input ended: ${event.error}`,
-          variant: 'destructive',
+          title: 'Voice Input Info',
+          description: `Voice dictation stopped (${event.error})`,
+          variant: 'default',
         });
       }
     };
 
     recognition.onend = () => {
-      // Auto-restart if user has not explicitly clicked stop
-      if (shouldListenRef.current && recognitionRef.current) {
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          shouldListenRef.current = false;
-          setIsListening(false);
-        }
-      } else {
-        setIsListening(false);
-      }
+      setIsListening(false);
     };
 
     recognitionRef.current = recognition;
 
     return () => {
-      shouldListenRef.current = false;
       if (recognitionRef.current) {
         try {
           recognitionRef.current.stop();
@@ -119,7 +100,6 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     }
 
     if (isListening) {
-      shouldListenRef.current = false;
       try {
         recognitionRef.current?.stop();
       } catch (err) {
@@ -127,18 +107,16 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       }
       setIsListening(false);
     } else {
-      shouldListenRef.current = true;
-      processedIndicesRef.current = new Set();
+      lastTranscriptRef.current = '';
       try {
         recognitionRef.current?.start();
         setIsListening(true);
         toast({
           title: 'Voice Input Active 🎙️',
-          description: 'Speak your story idea. Click the mic button when done.',
+          description: 'Speak your story idea. Dictation will complete when you finish speaking.',
         });
       } catch (err) {
         console.error('Failed to start speech recognition:', err);
-        shouldListenRef.current = false;
         setIsListening(false);
       }
     }
