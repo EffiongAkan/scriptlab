@@ -229,7 +229,7 @@ export const SeasonPlanningSelector: React.FC<SeasonPlanningSelectorProps> = ({
                     <Label htmlFor="seasonTheme">Season Theme / Story Idea *</Label>
                     <VoiceInputButton
                         onTranscript={(text) => {
-                            setSeasonTheme((prev) => (prev ? `${prev} ${text}` : text));
+                            setSeasonTheme((prev) => (prev ? `${prev.trim()} ${text}` : text));
                         }}
                     />
                 </div>

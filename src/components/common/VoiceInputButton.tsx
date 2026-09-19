@@ -19,6 +19,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
   const recognitionRef = useRef<any>(null);
   const onTranscriptRef = useRef(onTranscript);
   const shouldListenRef = useRef(false);
+  const processedIndicesRef = useRef<Set<number>>(new Set());
   const { toast } = useToast();
 
   // Always keep latest callback reference without re-triggering effect
@@ -41,16 +42,21 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
     recognition.lang = 'en-US';
 
     recognition.onresult = (event: any) => {
-      let currentTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const transcriptPart = event.results[i][0].transcript;
-        if (event.results[i].isFinal) {
-          currentTranscript += transcriptPart + ' ';
+      let newTranscript = '';
+
+      for (let i = 0; i < event.results.length; i++) {
+        const result = event.results[i];
+        if (result && result.isFinal && !processedIndicesRef.current.has(i)) {
+          processedIndicesRef.current.add(i);
+          const text = result[0]?.transcript?.trim();
+          if (text) {
+            newTranscript += (newTranscript ? ' ' : '') + text;
+          }
         }
       }
 
-      if (currentTranscript.trim()) {
-        onTranscriptRef.current(currentTranscript.trim());
+      if (newTranscript) {
+        onTranscriptRef.current(newTranscript);
       }
     };
 
@@ -122,6 +128,7 @@ export const VoiceInputButton: React.FC<VoiceInputButtonProps> = ({
       setIsListening(false);
     } else {
       shouldListenRef.current = true;
+      processedIndicesRef.current = new Set();
       try {
         recognitionRef.current?.start();
         setIsListening(true);

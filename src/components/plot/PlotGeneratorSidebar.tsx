@@ -99,7 +99,7 @@ export function PlotGeneratorSidebar({
               onTranscript={(text) =>
                 setGenerationPrompt({
                   ...generationPrompt,
-                  seedPlot: generationPrompt.seedPlot ? `${generationPrompt.seedPlot} ${text}` : text
+                  seedPlot: generationPrompt.seedPlot ? `${generationPrompt.seedPlot.trim()} ${text}` : text
                 })
               }
             />

@@ -501,7 +501,7 @@ export const ScriptCreationDialog: React.FC<ScriptCreationDialogProps> = ({ open
                   <Label htmlFor="storyIdea">Story Idea</Label>
                   <VoiceInputButton
                     onTranscript={(text) => {
-                      setStoryIdea((prev) => (prev ? `${prev} ${text}` : text));
+                      setStoryIdea((prev) => (prev ? `${prev.trim()} ${text}` : text));
                       setValidationErrors((prev) => ({ ...prev, idea: undefined }));
                     }}
                   />
