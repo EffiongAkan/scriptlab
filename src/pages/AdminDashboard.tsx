@@ -24,7 +24,8 @@ import {
   ArrowUpDown,
   Trash2,
   Pause,
-  Play
+  Play,
+  Key
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { AdminAccessGate } from '@/components/admin/AdminAccessGate';
 import { DetailedUserCard } from '@/components/admin/DetailedUserCard';
+import { AdminResetPasswordDialog } from '@/components/admin/AdminResetPasswordDialog';
 import { SubscriptionPlanManager } from '@/components/admin/SubscriptionPlanManager';
 import { NotificationManager } from '@/components/admin/NotificationManager';
 import { AdminLevelManager } from '@/components/admin/AdminLevelManager';
@@ -91,6 +93,7 @@ export default function AdminDashboard() {
   const { toast } = useToast();
   const { isSuperAdmin, permissions, loading: accessLoading } = useAdminAccess();
   const [users, setUsers] = useState<DetailedUser[]>([]);
+  const [selectedUserForReset, setSelectedUserForReset] = useState<DetailedUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [systemSettings, setSystemSettings] = useState<Record<string, any>>({});
   const [apiKeyStatuses, setApiKeyStatuses] = useState<Record<string, boolean>>({});
@@ -861,6 +864,7 @@ export default function AdminDashboard() {
                           onUpdateUser={handleUpdateUser}
                           onDeleteUser={handleDeleteUser}
                           onSendNotification={(userId) => console.log('Send notification to', userId)}
+                          onResetPassword={(u) => setSelectedUserForReset(u)}
                         />
                       ))}
                     </div>
@@ -916,6 +920,9 @@ export default function AdminDashboard() {
                                 </td>
                                 <td className="px-4 py-3 text-right">
                                   <div className="flex items-center justify-end gap-1">
+                                    <Button size="icon" variant="ghost" className="h-8 w-8 text-amber-500 hover:text-amber-600 hover:bg-amber-500/10" title="Reset Password" onClick={() => setSelectedUserForReset(user)}>
+                                      <Key className="h-4 w-4" />
+                                    </Button>
                                     <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => handleUpdateUser(user.id, { status: user.status === 'active' ? 'paused' : 'active' })}>
                                       {user.status === 'active' ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 text-green-600" />}
                                     </Button>
@@ -1342,6 +1349,14 @@ export default function AdminDashboard() {
           )}
         </Tabs>
       </div>
+
+      {selectedUserForReset && (
+        <AdminResetPasswordDialog
+          user={selectedUserForReset}
+          isOpen={!!selectedUserForReset}
+          onClose={() => setSelectedUserForReset(null)}
+        />
+      )}
     </AdminAccessGate>
   );
 }

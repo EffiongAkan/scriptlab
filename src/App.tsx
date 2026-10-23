@@ -24,6 +24,7 @@ import IndustryIntegrationPage from "@/pages/IndustryIntegrationPage";
 import VersionControlPage from "@/pages/VersionControlPage";
 import SharedScriptReader from "@/pages/SharedScriptReader";
 import DebugAI from "@/pages/DebugAI";
+import YorubaAudioTranslator from "@/pages/YorubaAudioTranslator";
 
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useEffect } from "react";
@@ -62,6 +63,8 @@ const App = () => {
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-use" element={<TermsOfUse />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/reset-password" element={<Auth />} />
+          <Route path="/update-password" element={<Auth />} />
           <Route
             path="/dashboard"
             element={
@@ -95,6 +98,20 @@ const App = () => {
           <Route
             path="/plot"
             element={<Navigate to="/plot-generator" replace />}
+          />
+          <Route
+            path="/yoruba-subtitles"
+            element={
+              <AuthGuard>
+                <Layout>
+                  <YorubaAudioTranslator />
+                </Layout>
+              </AuthGuard>
+            }
+          />
+          <Route
+            path="/audio-translator"
+            element={<Navigate to="/yoruba-subtitles" replace />}
           />
 
 

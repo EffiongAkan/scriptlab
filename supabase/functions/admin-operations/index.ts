@@ -686,6 +686,90 @@ serve(async (req) => {
           })
         }
 
+      case 'reset_user_password':
+        try {
+          const { data: adminCheck, error: adminCheckError } = await supabaseClient
+            .from('admin_users')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('is_active', true)
+            .maybeSingle()
+
+          if (adminCheckError || !adminCheck) {
+            return new Response(JSON.stringify({ error: 'Admin access required' }), {
+              status: 403,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const { userId, newPassword, sendEmail } = data
+          if (!userId) {
+            return new Response(JSON.stringify({ error: 'User ID is required' }), {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          // Fetch the user to get their email
+          const { data: userData, error: getUserError } = await supabaseClient.auth.admin.getUserById(userId)
+          if (getUserError || !userData?.user) {
+            return new Response(JSON.stringify({ error: 'Target user not found' }), {
+              status: 404,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+          }
+
+          const targetEmail = userData.user.email
+
+          // If newPassword is provided, use it; otherwise generate a temporary password
+          let passwordToSet = newPassword
+          if (!passwordToSet || typeof passwordToSet !== 'string' || passwordToSet.trim().length === 0) {
+            const randomSuffix = Math.random().toString(36).slice(-6)
+            passwordToSet = `Temp#${randomSuffix}!`
+          }
+
+          const { error: updateError } = await supabaseClient.auth.admin.updateUserById(userId, {
+            password: passwordToSet
+          })
+
+          if (updateError) {
+            console.error('Error updating password via admin:', updateError)
+            throw updateError
+          }
+
+          let recoveryLink = null
+          if (sendEmail && targetEmail) {
+            try {
+              const { data: linkData, error: linkError } = await supabaseClient.auth.admin.generateLink({
+                type: 'recovery',
+                email: targetEmail
+              })
+              if (!linkError && linkData?.properties?.action_link) {
+                recoveryLink = linkData.properties.action_link
+              }
+            } catch (err) {
+              console.warn('Could not generate recovery link:', err)
+            }
+          }
+
+          console.log(`[reset_user_password] Password successfully reset for user ${userId} (${targetEmail}) by admin ${user.email}`)
+
+          return new Response(JSON.stringify({
+            success: true,
+            temporaryPassword: passwordToSet,
+            userEmail: targetEmail,
+            recoveryLink
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        } catch (error: any) {
+          console.error('Error resetting user password:', error)
+          return new Response(JSON.stringify({ error: error?.message || 'Failed to reset user password' }), {
+            status: 500,
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+          })
+        }
+
       case 'send_notification':
         try {
           const { data: adminCheck, error: adminCheckError } = await supabaseClient

@@ -17,7 +17,8 @@ import {
   Shield,
   Activity,
   FileText,
-  Zap
+  Zap,
+  Key
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
@@ -50,13 +51,15 @@ interface DetailedUserCardProps {
   onUpdateUser: (userId: string, updates: any) => void;
   onDeleteUser: (userId: string) => void;
   onSendNotification: (userId: string) => void;
+  onResetPassword?: (user: DetailedUser) => void;
 }
 
 export const DetailedUserCard: React.FC<DetailedUserCardProps> = ({
   user,
   onUpdateUser,
   onDeleteUser,
-  onSendNotification
+  onSendNotification,
+  onResetPassword
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [credits, setCredits] = useState(user.profile?.ai_credits || 0);
@@ -176,7 +179,7 @@ export const DetailedUserCard: React.FC<DetailedUserCardProps> = ({
         </div>
 
         {/* Action Buttons */}
-        <div className="flex items-center gap-2 pt-2 border-t">
+        <div className="flex flex-wrap items-center gap-2 pt-2 border-t">
           <Button
             size="sm"
             variant="outline"
@@ -196,19 +199,33 @@ export const DetailedUserCard: React.FC<DetailedUserCardProps> = ({
             )}
           </Button>
 
+          {onResetPassword && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onResetPassword(user)}
+              className="text-amber-500 hover:text-amber-600 hover:bg-amber-500/10 border-amber-500/20"
+              title="Reset Password & Create Temp Password"
+            >
+              <Key className="h-3 w-3 mr-1" />
+              Reset Pass
+            </Button>
+          )}
+
           <Button
             size="sm"
             variant="outline"
             onClick={() => onSendNotification(user.id)}
+            title="Send Notification"
           >
-            <Mail className="h-3 w-3 mr-1" />
-            Notify
+            <Mail className="h-3 w-3" />
           </Button>
 
           <Button
             size="sm"
             variant="destructive"
             onClick={() => onDeleteUser(user.id)}
+            title="Delete User"
           >
             <Trash2 className="h-3 w-3" />
           </Button>
